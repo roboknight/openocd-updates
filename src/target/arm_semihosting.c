@@ -375,7 +375,7 @@ static int do_semihosting(struct target *target)
 		return target_call_event_callbacks(target, TARGET_EVENT_HALTED);
 
 	case 0x12:	/* SYS_SYSTEM */
-		/* Provide SYS_SYSTEM functionality.  Uses the 
+		/* Provide SYS_SYSTEM functionality.  Uses the
 		 * libc system command, there may be a reason *NOT*
 		 * to use this, but as I can't think of one, I
 		 * implemented it this way.
@@ -384,17 +384,14 @@ static int do_semihosting(struct target *target)
 		if (retval != ERROR_OK)
 			return retval;
 		else {
-			//printf ("Reading from address 0x%08x\n",r1);
-			//printf ("Got a system command[0x%08x,0x%08x]\n",*(unsigned int *)params,*(unsigned int *)(params+4));
 			uint32_t len = target_buffer_get_u32(target, params+4);
 			uint32_t c_ptr = target_buffer_get_u32(target, params);
 			uint8_t cmd[256];
-			//printf ("Got a system command[0x%08x,0x%08x]\n",c_ptr,len);
-			if(len > 255) {
+			if (len > 255) {
 				result = -1;
 				arm->semihosting_errno = EINVAL;
 			} else {
-				memset(cmd,0x0,256);
+				memset(cmd, 0x0, 256);
 				retval = target_read_memory(target, c_ptr, 1, len, cmd);
 				if (retval != ERROR_OK)
 					return retval;
