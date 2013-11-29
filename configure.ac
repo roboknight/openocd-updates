@@ -1263,6 +1263,7 @@ AC_CONFIG_FILES([
   src/transport/Makefile
   src/target/openrisc/Makefile
   src/target/jem/Makefile
+  src/target/blackfin/Makefile
   src/xsvf/Makefile
   src/svf/Makefile
   src/target/Makefile
