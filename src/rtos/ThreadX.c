@@ -15,7 +15,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -73,7 +73,7 @@ struct ThreadX_params {
 
 const struct ThreadX_params ThreadX_params_list[] = {
 	{
-	"cortex_m3",				/* target_name */
+	"cortex_m",				/* target_name */
 	4,							/* pointer_width; */
 	8,							/* thread_stack_offset; */
 	40,							/* thread_name_offset; */

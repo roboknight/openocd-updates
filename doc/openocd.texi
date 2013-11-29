@@ -79,6 +79,7 @@ Free Documentation License''.
 * Architecture and Core Commands::   Architecture and Core Commands
 * JTAG Commands::                    JTAG Commands
 * Boundary Scan Commands::           Boundary Scan Commands
+* Utility Commands::                 Utility Commands
 * TFTP::                             TFTP
 * GDB and OpenOCD::                  Using GDB and OpenOCD
 * Tcl Scripting API::                Tcl Scripting API
@@ -161,9 +162,9 @@ debugged via the GDB protocol.
 
 @b{Flash Programing:} Flash writing is supported for external CFI
 compatible NOR flashes (Intel and AMD/Spansion command set) and several
-internal flashes (LPC1700, LPC2000, AT91SAM7, AT91SAM3U, STR7x, STR9x, LM3,
-STM32x and EFM32). Preliminary support for various NAND flash controllers
-(LPC3180, Orion, S3C24xx, more) controller is included.
+internal flashes (LPC1700, LPC1800, LPC2000, LPC4300, AT91SAM7, AT91SAM3U,
+STR7x, STR9x, LM3, STM32x and EFM32). Preliminary support for various NAND flash
+controllers (LPC3180, Orion, S3C24xx, more) controller is included.
 
 @section OpenOCD Web Site
 
@@ -321,13 +322,25 @@ Ethernet port needed?
 RTCK support? Also known as ``adaptive clocking''
 @end enumerate
 
-@section Stand alone Systems
+@section Stand-alone JTAG Probe
+
+The ZY1000 from Ultimate Solutions is technically not a dongle but a
+stand-alone JTAG probe that unlikemost dongles doesn’t require any drivers
+running on the developers host computer.
+Once installed on a network using DHCP or a static IP assignment, users can
+access the ZY1000 probe locally or remotely from any host with access to the
+IP address assigned to the probe.
+The ZY1000 provides an intuitive web interface with direct access to the
+OpenOCD debugger.
+Users may also run a GDBSERVER directly on the ZY1000 to take full advantage
+of GCC & GDB to debug any distribution of embedded Linux or NetBSD running on
+the target.
+The ZY1000 supports RTCK & RCLK or adaptive clocking and has a built-in relay
+to power cycle the target remotely.
+
+For more information, visit:
 
 @b{ZY1000} See: @url{http://www.ultsol.com/index.php/component/content/article/8/33-zylin-zy1000-jtag-probe}
-Technically, not a dongle, but a standalone box. The ZY1000 has the advantage that it does
-not require any drivers installed on the developer PC. It also has
-a built in web interface. It supports RTCK/RCLK or adaptive clocking
-and has a built in relay to power cycle targets remotely.
 
 @section USB FT2232 Based
 
@@ -336,8 +349,10 @@ on a chip from ``Future Technology Devices International'' (FTDI)
 known as the FTDI FT2232; this is a USB full speed (12 Mbps) chip.
 See: @url{http://www.ftdichip.com} for more information.
 In summer 2009, USB high speed (480 Mbps) versions of these FTDI
-chips are starting to become available in JTAG adapters. (Adapters
-using those high speed FT2232H chips may support adaptive clocking.)
+chips are starting to become available in JTAG adapters. Around 2012 a new
+variant appeared - FT232H - this is a single-channel version of FT2232H.
+(Adapters using those high speed FT2232H or FT232H chips may support adaptive
+clocking.)
 
 The FT2232 chips are flexible enough to support some other
 transport options, such as SWD or the SPI variants used to
@@ -394,8 +409,14 @@ to be available anymore as of April 2012.
 @item @b{opendous}
 @* Link @url{http://code.google.com/p/opendous/wiki/JTAG} FT2232H-based
 (OpenHardware).
-@end itemize
+@item @b{JTAG-lock-pick Tiny 2}
+@* Link @url{http://www.distortec.com/jtag-lock-pick-tiny-2} FT232H-based
 
+@item @b{GW16042}
+@* Link: @url{http://shop.gateworks.com/index.php?route=product/product&path=70_80&product_id=64}
+FT2232H-based
+
+@end itemize
 @section USB-JTAG / Altera USB-Blaster compatibles
 
 These devices also show up as FTDI devices, but are not
@@ -518,9 +539,6 @@ produced, PDF schematics are easily found and it is easy to make.
 @item @b{Amontec - JTAG Accelerator}
 @* Link: @url{http://www.amontec.com/jtag_accelerator.shtml}
 
-@item @b{GW16402}
-@* Link: @url{http://www.gateworks.com/products/avila_accessories/gw16042.php}
-
 @item @b{Wiggler2}
 @* Link: @url{http://www.ccac.rwth-aachen.de/~michaels/index.php/hardware/armjtag}
 
@@ -557,6 +575,13 @@ produced, PDF schematics are easily found and it is easy to make.
 
 @item @b{at91rm9200}
 @* Like the EP93xx - but an ATMEL AT91RM9200 based solution using the GPIO pins on the chip.
+
+@item @b{bcm2835gpio}
+@* A BCM2835-based board (e.g. Raspberry Pi) using the GPIO pins of the expansion header.
+
+@item @b{jtag_vpi}
+@* A JTAG driver acting as a client for the JTAG VPI server interface.
+@* Link: @url{http://github.com/fjullien/jtag_vpi}
 
 @end itemize
 
@@ -986,7 +1011,7 @@ that the @code{reset-init} event handler does.
 Likewise, the @command{arm9 vector_catch} command (or
 @cindex vector_catch
 its siblings @command{xscale vector_catch}
-and @command{cortex_m3 vector_catch}) can be a timesaver
+and @command{cortex_m vector_catch}) can be a timesaver
 during some debug sessions, but don't make everyone use that either.
 Keep those kinds of debugging aids in your user config file,
 along with messaging and tracing setup.
@@ -1257,31 +1282,52 @@ Use them as-is where you can; or as models for new files.
 These are for debug adapters.
 Files that configure JTAG adapters go here.
 @example
-$ ls interface
-altera-usb-blaster.cfg    hilscher_nxhx50_etm.cfg    openrd.cfg
-arm-jtag-ew.cfg           hilscher_nxhx50_re.cfg     osbdm.cfg
-arm-usb-ocd.cfg           hitex_str9-comstick.cfg    parport.cfg
-at91rm9200.cfg            icebear.cfg                parport_dlc5.cfg
-axm0432.cfg               jlink.cfg                  redbee-econotag.cfg
-busblaster.cfg            jtagkey2.cfg               redbee-usb.cfg
-buspirate.cfg             jtagkey2p.cfg              rlink.cfg
-calao-usb-a9260-c01.cfg   jtagkey.cfg                sheevaplug.cfg
-calao-usb-a9260-c02.cfg   jtagkey-tiny.cfg           signalyzer.cfg
-calao-usb-a9260.cfg       kt-link.cfg                signalyzer-h2.cfg
-chameleon.cfg             lisa-l.cfg                 signalyzer-h4.cfg
-cortino.cfg               luminary.cfg               signalyzer-lite.cfg
-digilent-hs1.cfg          luminary-icdi.cfg          stlink-v1.cfg
-dlp-usb1232h.cfg          luminary-lm3s811.cfg       stlink-v2.cfg
-dummy.cfg                 minimodule.cfg             stm32-stick.cfg
-estick.cfg                neodb.cfg                  turtelizer2.cfg
-flashlink.cfg             ngxtech.cfg                ulink.cfg
-flossjtag.cfg             olimex-arm-usb-ocd.cfg     usb-jtag.cfg
-flossjtag-noeeprom.cfg    olimex-arm-usb-ocd-h.cfg   usbprog.cfg
-flyswatter2.cfg           olimex-arm-usb-tiny-h.cfg  vpaclink.cfg
-flyswatter.cfg            olimex-jtag-tiny.cfg       vsllink.cfg
-hilscher_nxhx10_etm.cfg   oocdlink.cfg               xds100v2.cfg
-hilscher_nxhx500_etm.cfg  opendous.cfg
-hilscher_nxhx500_re.cfg   openocd-usb.cfg
+$ ls interface -R
+interface/:
+altera-usb-blaster.cfg    hilscher_nxhx50_re.cfg     openocd-usb-hs.cfg
+arm-jtag-ew.cfg           hitex_str9-comstick.cfg    openrd.cfg
+at91rm9200.cfg            icebear.cfg                osbdm.cfg
+axm0432.cfg               jlink.cfg                  parport.cfg
+busblaster.cfg            jtagkey2.cfg               parport_dlc5.cfg
+buspirate.cfg             jtagkey2p.cfg              redbee-econotag.cfg
+calao-usb-a9260-c01.cfg   jtagkey.cfg                redbee-usb.cfg
+calao-usb-a9260-c02.cfg   jtagkey-tiny.cfg           rlink.cfg
+calao-usb-a9260.cfg       jtag-lock-pick_tiny_2.cfg  sheevaplug.cfg
+chameleon.cfg             kt-link.cfg                signalyzer.cfg
+cortino.cfg               lisa-l.cfg                 signalyzer-h2.cfg
+digilent-hs1.cfg          luminary.cfg               signalyzer-h4.cfg
+dlp-usb1232h.cfg          luminary-icdi.cfg          signalyzer-lite.cfg
+dummy.cfg                 luminary-lm3s811.cfg       stlink-v1.cfg
+estick.cfg                minimodule.cfg             stlink-v2.cfg
+flashlink.cfg             neodb.cfg                  stm32-stick.cfg
+flossjtag.cfg             ngxtech.cfg                sysfsgpio-raspberrypi.cfg
+flossjtag-noeeprom.cfg    olimex-arm-usb-ocd.cfg     ti-icdi.cfg
+flyswatter2.cfg           olimex-arm-usb-ocd-h.cfg   turtelizer2.cfg
+flyswatter.cfg            olimex-arm-usb-tiny-h.cfg  ulink.cfg
+ftdi                      olimex-jtag-tiny.cfg       usb-jtag.cfg
+hilscher_nxhx10_etm.cfg   oocdlink.cfg               usbprog.cfg
+hilscher_nxhx500_etm.cfg  opendous.cfg               vpaclink.cfg
+hilscher_nxhx500_re.cfg   opendous_ftdi.cfg          vsllink.cfg
+hilscher_nxhx50_etm.cfg   openocd-usb.cfg            xds100v2.cfg
+
+interface/ftdi:
+axm0432.cfg               hitex_str9-comstick.cfg    olimex-jtag-tiny.cfg
+calao-usb-a9260-c01.cfg   icebear.cfg                oocdlink.cfg
+calao-usb-a9260-c02.cfg   jtagkey2.cfg               opendous_ftdi.cfg
+cortino.cfg               jtagkey2p.cfg              openocd-usb.cfg
+dlp-usb1232h.cfg          jtagkey.cfg                openocd-usb-hs.cfg
+dp_busblaster.cfg         jtag-lock-pick_tiny_2.cfg  openrd.cfg
+flossjtag.cfg             kt-link.cfg                redbee-econotag.cfg
+flossjtag-noeeprom.cfg    lisa-l.cfg                 redbee-usb.cfg
+flyswatter2.cfg           luminary.cfg               sheevaplug.cfg
+flyswatter.cfg            luminary-icdi.cfg          signalyzer.cfg
+gw16042.cfg               luminary-lm3s811.cfg       signalyzer-lite.cfg
+hilscher_nxhx10_etm.cfg   minimodule.cfg             stm32-stick.cfg
+hilscher_nxhx500_etm.cfg  neodb.cfg                  turtelizer2-revB.cfg
+hilscher_nxhx500_re.cfg   ngxtech.cfg                turtelizer2-revC.cfg
+hilscher_nxhx50_etm.cfg   olimex-arm-usb-ocd.cfg     vpaclink.cfg
+hilscher_nxhx50_re.cfg    olimex-arm-usb-ocd-h.cfg   xds100v2.cfg
+hitex_lpc1768stick.cfg    olimex-arm-usb-tiny-h.cfg
 $
 @end example
 @item @file{board} ...
@@ -1297,72 +1343,77 @@ board file. Boards may also contain multiple targets: two CPUs; or
 a CPU and an FPGA.
 @example
 $ ls board
-actux3.cfg                        logicpd_imx27.cfg
-am3517evm.cfg                     lubbock.cfg
-arm_evaluator7t.cfg               mcb1700.cfg
-at91cap7a-stk-sdram.cfg           microchip_explorer16.cfg
-at91eb40a.cfg                     mini2440.cfg
-at91rm9200-dk.cfg                 mini6410.cfg
-at91rm9200-ek.cfg                 olimex_LPC2378STK.cfg
-at91sam9261-ek.cfg                olimex_lpc_h2148.cfg
-at91sam9263-ek.cfg                olimex_sam7_ex256.cfg
-at91sam9g20-ek.cfg                olimex_sam9_l9260.cfg
-atmel_at91sam7s-ek.cfg            olimex_stm32_h103.cfg
-atmel_at91sam9260-ek.cfg          olimex_stm32_h107.cfg
-atmel_at91sam9rl-ek.cfg           olimex_stm32_p107.cfg
-atmel_sam3n_ek.cfg                omap2420_h4.cfg
-atmel_sam3s_ek.cfg                open-bldc.cfg
-atmel_sam3u_ek.cfg                openrd.cfg
-atmel_sam3x_ek.cfg                osk5912.cfg
-atmel_sam4s_ek.cfg                phytec_lpc3250.cfg
-balloon3-cpu.cfg                  pic-p32mx.cfg
-colibri.cfg                       propox_mmnet1001.cfg
-crossbow_tech_imote2.cfg          pxa255_sst.cfg
-csb337.cfg                        redbee.cfg
-csb732.cfg                        rsc-w910.cfg
-da850evm.cfg                      sheevaplug.cfg
-digi_connectcore_wi-9c.cfg        smdk6410.cfg
-diolan_lpc4350-db1.cfg            spear300evb.cfg
-dm355evm.cfg                      spear300evb_mod.cfg
-dm365evm.cfg                      spear310evb20.cfg
-dm6446evm.cfg                     spear310evb20_mod.cfg
-efikamx.cfg                       spear320cpu.cfg
-eir.cfg                           spear320cpu_mod.cfg
-ek-lm3s1968.cfg                   steval_pcc010.cfg
-ek-lm3s3748.cfg                   stm320518_eval_stlink.cfg
-ek-lm3s6965.cfg                   stm32100b_eval.cfg
-ek-lm3s811.cfg                    stm3210b_eval.cfg
-ek-lm3s811-revb.cfg               stm3210c_eval.cfg
-ek-lm3s9b9x.cfg                   stm3210e_eval.cfg
+actux3.cfg                        lpc1850_spifi_generic.cfg
+am3517evm.cfg                     lpc4350_spifi_generic.cfg
+arm_evaluator7t.cfg               lubbock.cfg
+at91cap7a-stk-sdram.cfg           mcb1700.cfg
+at91eb40a.cfg                     microchip_explorer16.cfg
+at91rm9200-dk.cfg                 mini2440.cfg
+at91rm9200-ek.cfg                 mini6410.cfg
+at91sam9261-ek.cfg                netgear-dg834v3.cfg
+at91sam9263-ek.cfg                olimex_LPC2378STK.cfg
+at91sam9g20-ek.cfg                olimex_lpc_h2148.cfg
+atmel_at91sam7s-ek.cfg            olimex_sam7_ex256.cfg
+atmel_at91sam9260-ek.cfg          olimex_sam9_l9260.cfg
+atmel_at91sam9rl-ek.cfg           olimex_stm32_h103.cfg
+atmel_sam3n_ek.cfg                olimex_stm32_h107.cfg
+atmel_sam3s_ek.cfg                olimex_stm32_p107.cfg
+atmel_sam3u_ek.cfg                omap2420_h4.cfg
+atmel_sam3x_ek.cfg                open-bldc.cfg
+atmel_sam4s_ek.cfg                openrd.cfg
+balloon3-cpu.cfg                  osk5912.cfg
+colibri.cfg                       phone_se_j100i.cfg
+crossbow_tech_imote2.cfg          phytec_lpc3250.cfg
+csb337.cfg                        pic-p32mx.cfg
+csb732.cfg                        propox_mmnet1001.cfg
+da850evm.cfg                      pxa255_sst.cfg
+digi_connectcore_wi-9c.cfg        redbee.cfg
+diolan_lpc4350-db1.cfg            rsc-w910.cfg
+dm355evm.cfg                      sheevaplug.cfg
+dm365evm.cfg                      smdk6410.cfg
+dm6446evm.cfg                     spear300evb.cfg
+efikamx.cfg                       spear300evb_mod.cfg
+eir.cfg                           spear310evb20.cfg
+ek-lm3s1968.cfg                   spear310evb20_mod.cfg
+ek-lm3s3748.cfg                   spear320cpu.cfg
+ek-lm3s6965.cfg                   spear320cpu_mod.cfg
+ek-lm3s811.cfg                    steval_pcc010.cfg
+ek-lm3s811-revb.cfg               stm320518_eval_stlink.cfg
+ek-lm3s8962.cfg                   stm32100b_eval.cfg
+ek-lm3s9b9x.cfg                   stm3210b_eval.cfg
+ek-lm3s9d92.cfg                   stm3210c_eval.cfg
+ek-lm4f120xl.cfg                  stm3210e_eval.cfg
 ek-lm4f232.cfg                    stm3220g_eval.cfg
 embedded-artists_lpc2478-32.cfg   stm3220g_eval_stlink.cfg
 ethernut3.cfg                     stm3241g_eval.cfg
 glyn_tonga2.cfg                   stm3241g_eval_stlink.cfg
 hammer.cfg                        stm32f0discovery.cfg
-hilscher_nxdb500sys.cfg           stm32f4discovery.cfg
-hilscher_nxeb500hmi.cfg           stm32ldiscovery.cfg
-hilscher_nxhx10.cfg               stm32vldiscovery.cfg
-hilscher_nxhx500.cfg              str910-eval.cfg
-hilscher_nxhx50.cfg               telo.cfg
-hilscher_nxsb100.cfg              ti_beagleboard.cfg
-hitex_lpc2929.cfg                 ti_beagleboard_xm.cfg
-hitex_stm32-performancestick.cfg  ti_beaglebone.cfg
-hitex_str9-comstick.cfg           ti_blaze.cfg
-iar_lpc1768.cfg                   ti_pandaboard.cfg
-iar_str912_sk.cfg                 ti_pandaboard_es.cfg
-icnova_imx53_sodimm.cfg           topas910.cfg
-icnova_sam9g45_sodimm.cfg         topasa900.cfg
-imx27ads.cfg                      twr-k60n512.cfg
-imx27lnst.cfg                     tx25_stk5.cfg
-imx28evk.cfg                      tx27_stk5.cfg
-imx31pdk.cfg                      unknown_at91sam9260.cfg
-imx35pdk.cfg                      uptech_2410.cfg
-imx53loco.cfg                     verdex.cfg
-keil_mcb1700.cfg                  voipac.cfg
-keil_mcb2140.cfg                  voltcraft_dso-3062c.cfg
-kwikstik.cfg                      x300t.cfg
-linksys_nslu2.cfg                 zy1000.cfg
-lisa-l.cfg
+hilscher_nxdb500sys.cfg           stm32f3discovery.cfg
+hilscher_nxeb500hmi.cfg           stm32f4discovery.cfg
+hilscher_nxhx10.cfg               stm32ldiscovery.cfg
+hilscher_nxhx500.cfg              stm32vldiscovery.cfg
+hilscher_nxhx50.cfg               str910-eval.cfg
+hilscher_nxsb100.cfg              telo.cfg
+hitex_lpc1768stick.cfg            ti_am335xevm.cfg
+hitex_lpc2929.cfg                 ti_beagleboard.cfg
+hitex_stm32-performancestick.cfg  ti_beagleboard_xm.cfg
+hitex_str9-comstick.cfg           ti_beaglebone.cfg
+iar_lpc1768.cfg                   ti_blaze.cfg
+iar_str912_sk.cfg                 ti_pandaboard.cfg
+icnova_imx53_sodimm.cfg           ti_pandaboard_es.cfg
+icnova_sam9g45_sodimm.cfg         topas910.cfg
+imx27ads.cfg                      topasa900.cfg
+imx27lnst.cfg                     twr-k60f120m.cfg
+imx28evk.cfg                      twr-k60n512.cfg
+imx31pdk.cfg                      tx25_stk5.cfg
+imx35pdk.cfg                      tx27_stk5.cfg
+imx53loco.cfg                     unknown_at91sam9260.cfg
+keil_mcb1700.cfg                  uptech_2410.cfg
+keil_mcb2140.cfg                  verdex.cfg
+kwikstik.cfg                      voipac.cfg
+linksys_nslu2.cfg                 voltcraft_dso-3062c.cfg
+lisa-l.cfg                        x300t.cfg
+logicpd_imx27.cfg                 zy1000.cfg
 $
 @end example
 @item @file{target} ...
@@ -1374,71 +1425,83 @@ When a chip has multiple TAPs (maybe it has both ARM and DSP cores),
 the target config file defines all of them.
 @example
 $ ls target
-$duc702x.cfg                       ixp42x.cfg
-am335x.cfg                         k40.cfg
-amdm37x.cfg                        k60.cfg
-ar71xx.cfg                         lpc1768.cfg
-at32ap7000.cfg                     lpc2103.cfg
-at91r40008.cfg                     lpc2124.cfg
-at91rm9200.cfg                     lpc2129.cfg
-at91sam3ax_4x.cfg                  lpc2148.cfg
-at91sam3ax_8x.cfg                  lpc2294.cfg
-at91sam3ax_xx.cfg                  lpc2378.cfg
-at91sam3nXX.cfg                    lpc2460.cfg
-at91sam3sXX.cfg                    lpc2478.cfg
-at91sam3u1c.cfg                    lpc2900.cfg
-at91sam3u1e.cfg                    lpc2xxx.cfg
-at91sam3u2c.cfg                    lpc3131.cfg
-at91sam3u2e.cfg                    lpc3250.cfg
-at91sam3u4c.cfg                    lpc4350.cfg
-at91sam3u4e.cfg                    mc13224v.cfg
-at91sam3uxx.cfg                    nuc910.cfg
-at91sam3XXX.cfg                    omap2420.cfg
-at91sam4sXX.cfg                    omap3530.cfg
-at91sam4XXX.cfg                    omap4430.cfg
-at91sam7se512.cfg                  omap4460.cfg
-at91sam7sx.cfg                     omap5912.cfg
-at91sam7x256.cfg                   omapl138.cfg
-at91sam7x512.cfg                   pic32mx.cfg
-at91sam9260.cfg                    pxa255.cfg
-at91sam9260_ext_RAM_ext_flash.cfg  pxa270.cfg
-at91sam9261.cfg                    pxa3xx.cfg
-at91sam9263.cfg                    readme.txt
-at91sam9.cfg                       samsung_s3c2410.cfg
-at91sam9g10.cfg                    samsung_s3c2440.cfg
-at91sam9g20.cfg                    samsung_s3c2450.cfg
-at91sam9g45.cfg                    samsung_s3c4510.cfg
-at91sam9rl.cfg                     samsung_s3c6410.cfg
-atmega128.cfg                      sharp_lh79532.cfg
-avr32.cfg                          smp8634.cfg
-c100.cfg                           spear3xx.cfg
-c100config.tcl                     stellaris.cfg
-c100helper.tcl                     stm32.cfg
-c100regs.tcl                       stm32f0x_stlink.cfg
-cs351x.cfg                         stm32f1x.cfg
-davinci.cfg                        stm32f1x_stlink.cfg
-dragonite.cfg                      stm32f2x.cfg
-dsp56321.cfg                       stm32f2x_stlink.cfg
-dsp568013.cfg                      stm32f2xxx.cfg
-dsp568037.cfg                      stm32f4x.cfg
-epc9301.cfg                        stm32f4x_stlink.cfg
-faux.cfg                           stm32l.cfg
-feroceon.cfg                       stm32lx_stlink.cfg
-fm3.cfg                            stm32_stlink.cfg
-hilscher_netx10.cfg                stm32xl.cfg
-hilscher_netx500.cfg               str710.cfg
-hilscher_netx50.cfg                str730.cfg
-icepick.cfg                        str750.cfg
-imx21.cfg                          str912.cfg
-imx25.cfg                          swj-dp.tcl
-imx27.cfg                          test_reset_syntax_error.cfg
-imx28.cfg                          test_syntax_error.cfg
-imx31.cfg                          ti_dm355.cfg
-imx35.cfg                          ti_dm365.cfg
-imx51.cfg                          ti_dm6446.cfg
-imx53.cfg                          tmpa900.cfg
-imx.cfg                            tmpa910.cfg
-is5114.cfg                         u8500.cfg
+aduc702x.cfg                       lpc1763.cfg
+am335x.cfg                         lpc1764.cfg
+amdm37x.cfg                        lpc1765.cfg
+ar71xx.cfg                         lpc1766.cfg
+at32ap7000.cfg                     lpc1767.cfg
+at91r40008.cfg                     lpc1768.cfg
+at91rm9200.cfg                     lpc1769.cfg
+at91sam3ax_4x.cfg                  lpc1788.cfg
+at91sam3ax_8x.cfg                  lpc17xx.cfg
+at91sam3ax_xx.cfg                  lpc1850.cfg
+at91sam3nXX.cfg                    lpc2103.cfg
+at91sam3sXX.cfg                    lpc2124.cfg
+at91sam3u1c.cfg                    lpc2129.cfg
+at91sam3u1e.cfg                    lpc2148.cfg
+at91sam3u2c.cfg                    lpc2294.cfg
+at91sam3u2e.cfg                    lpc2378.cfg
+at91sam3u4c.cfg                    lpc2460.cfg
+at91sam3u4e.cfg                    lpc2478.cfg
+at91sam3uxx.cfg                    lpc2900.cfg
+at91sam3XXX.cfg                    lpc2xxx.cfg
+at91sam4sd32x.cfg                  lpc3131.cfg
+at91sam4sXX.cfg                    lpc3250.cfg
+at91sam4XXX.cfg                    lpc4350.cfg
+at91sam7se512.cfg                  lpc4350.cfg.orig
+at91sam7sx.cfg                     mc13224v.cfg
+at91sam7x256.cfg                   nuc910.cfg
+at91sam7x512.cfg                   omap2420.cfg
+at91sam9260.cfg                    omap3530.cfg
+at91sam9260_ext_RAM_ext_flash.cfg  omap4430.cfg
+at91sam9261.cfg                    omap4460.cfg
+at91sam9263.cfg                    omap5912.cfg
+at91sam9.cfg                       omapl138.cfg
+at91sam9g10.cfg                    pic32mx.cfg
+at91sam9g20.cfg                    pxa255.cfg
+at91sam9g45.cfg                    pxa270.cfg
+at91sam9rl.cfg                     pxa3xx.cfg
+atmega128.cfg                      readme.txt
+avr32.cfg                          samsung_s3c2410.cfg
+c100.cfg                           samsung_s3c2440.cfg
+c100config.tcl                     samsung_s3c2450.cfg
+c100helper.tcl                     samsung_s3c4510.cfg
+c100regs.tcl                       samsung_s3c6410.cfg
+cs351x.cfg                         sharp_lh79532.cfg
+davinci.cfg                        smp8634.cfg
+dragonite.cfg                      spear3xx.cfg
+dsp56321.cfg                       stellaris.cfg
+dsp568013.cfg                      stellaris_icdi.cfg
+dsp568037.cfg                      stm32f0x_stlink.cfg
+efm32_stlink.cfg                   stm32f1x.cfg
+epc9301.cfg                        stm32f1x_stlink.cfg
+faux.cfg                           stm32f2x.cfg
+feroceon.cfg                       stm32f2x_stlink.cfg
+fm3.cfg                            stm32f3x.cfg
+hilscher_netx10.cfg                stm32f3x_stlink.cfg
+hilscher_netx500.cfg               stm32f4x.cfg
+hilscher_netx50.cfg                stm32f4x_stlink.cfg
+icepick.cfg                        stm32l.cfg
+imx21.cfg                          stm32lx_dual_bank.cfg
+imx25.cfg                          stm32lx_stlink.cfg
+imx27.cfg                          stm32_stlink.cfg
+imx28.cfg                          stm32w108_stlink.cfg
+imx31.cfg                          stm32xl.cfg
+imx35.cfg                          str710.cfg
+imx51.cfg                          str730.cfg
+imx53.cfg                          str750.cfg
+imx6.cfg                           str912.cfg
+imx.cfg                            swj-dp.tcl
+is5114.cfg                         test_reset_syntax_error.cfg
+ixp42x.cfg                         test_syntax_error.cfg
+k40.cfg                            ti-ar7.cfg
+k60.cfg                            ti_calypso.cfg
+lpc1751.cfg                        ti_dm355.cfg
+lpc1752.cfg                        ti_dm365.cfg
+lpc1754.cfg                        ti_dm6446.cfg
+lpc1756.cfg                        tmpa900.cfg
+lpc1758.cfg                        tmpa910.cfg
+lpc1759.cfg                        u8500.cfg
 @end example
 @item @emph{more} ... browse for other library files which may be useful.
 For example, there are various generic and CPU-specific utilities.
@@ -1878,14 +1941,14 @@ After setting targets, you can define a list of targets working in SMP.
 @example
 set _TARGETNAME_1 $_CHIPNAME.cpu1
 set _TARGETNAME_2 $_CHIPNAME.cpu2
-target create $_TARGETNAME_1 cortex_a8 -chain-position $_CHIPNAME.dap \
+target create $_TARGETNAME_1 cortex_a -chain-position $_CHIPNAME.dap \
 -coreid 0 -dbgbase $_DAP_DBG1
-target create $_TARGETNAME_2 cortex_a8 -chain-position $_CHIPNAME.dap \
+target create $_TARGETNAME_2 cortex_a -chain-position $_CHIPNAME.dap \
 -coreid 1 -dbgbase $_DAP_DBG2
 #define 2 targets working in smp.
 target smp $_CHIPNAME.cpu2 $_CHIPNAME.cpu1
 @end example
-In the above example on cortex_a8, 2 cpus are working in SMP.
+In the above example on cortex_a, 2 cpus are working in SMP.
 In SMP only one GDB instance is created and :
 @itemize @bullet
 @item a set of hardware breakpoint sets the same breakpoint on all targets in the list.
@@ -1896,32 +1959,32 @@ In SMP only one GDB instance is created and :
 displayed by the GDB session @pxref{usingopenocdsmpwithgdb,,Using OpenOCD SMP with GDB}.
 @end itemize
 
-The SMP behaviour can be disabled/enabled dynamically. On cortex_a8 following
+The SMP behaviour can be disabled/enabled dynamically. On cortex_a following
 command have been implemented.
 @itemize @bullet
-@item cortex_a8 smp_on : enable SMP mode, behaviour is as described above.
-@item cortex_a8 smp_off : disable SMP mode, the current target is the one
+@item cortex_a smp_on : enable SMP mode, behaviour is as described above.
+@item cortex_a smp_off : disable SMP mode, the current target is the one
 displayed in the GDB session, only this target is now controlled by GDB
 session. This behaviour is useful during system boot up.
-@item cortex_a8 smp_gdb : display/fix the core id displayed in GDB session see
+@item cortex_a smp_gdb : display/fix the core id displayed in GDB session see
 following example.
 @end itemize
 
 @example
->cortex_a8 smp_gdb
+>cortex_a smp_gdb
 gdb coreid  0 -> -1
 #0 : coreid 0 is displayed to GDB ,
 #-> -1 : next resume triggers a real resume
-> cortex_a8 smp_gdb 1
+> cortex_a smp_gdb 1
 gdb coreid  0 -> 1
 #0 :coreid 0 is displayed to GDB ,
 #->1  : next resume displays coreid 1 to GDB
 > resume
-> cortex_a8 smp_gdb
+> cortex_a smp_gdb
 gdb coreid  1 -> 1
 #1 :coreid 1 is displayed to GDB ,
 #->1 : next resume displays coreid 1 to GDB
-> cortex_a8 smp_gdb -1
+> cortex_a smp_gdb -1
 gdb coreid  1 -> -1
 #1 :coreid 1 is displayed to GDB,
 #->-1 : next resume triggers a real resume
@@ -1948,7 +2011,7 @@ don't want to reset all targets at once.
 Such a handler might write to chip registers to force a reset,
 use a JRC to do that (preferable -- the target may be wedged!),
 or force a watchdog timer to trigger.
-(For Cortex-M3 targets, this is not necessary. The target
+(For Cortex-M targets, this is not necessary.  The target
 driver knows how to use trigger an NVIC reset when SRST is
 not available.)
 
@@ -2294,6 +2357,17 @@ Specifies whether data aborts cause an error to be reported
 by GDB memory read packets.
 The default behaviour is @option{disable};
 use @option{enable} see these errors reported.
+@end deffn
+
+@deffn {Config Command} gdb_target_description (@option{enable}|@option{disable})
+Set to @option{enable} to cause OpenOCD to send the target descriptions to gdb via qXfer:features:read packet.
+The default behaviour is @option{disable}.
+@end deffn
+
+@deffn {Command} gdb_save_tdesc
+Saves the target descripton file to the local file system.
+
+The file name is @i{target_name}.xml.
 @end deffn
 
 @anchor{eventpolling}
@@ -2970,6 +3044,13 @@ The vendor ID and product ID of the device.
 @deffn {Config Command} {stlink_api} api_level
 Manually sets the stlink api used, valid options are 1 or 2. (@b{STLINK Only}).
 @end deffn
+
+@deffn {Config Command} {trace} source_clock_hz [output_file_path]
+Enable SWO tracing (if supported). The source clock rate for the
+trace port must be specified, this is typically the CPU clock rate. If
+the optional output file is specified then raw trace data is appended
+to the file, and the file is created if it does not exist.
+@end deffn
 @end deffn
 
 @deffn {Interface Driver} {opendous}
@@ -2994,6 +3075,22 @@ Turn power switch to target on/off.
 No arguments: print status.
 @end deffn
 
+@deffn {Interface Driver} {bcm2835gpio}
+This SoC is present in Raspberry Pi which is a cheap single-board computer
+exposing some GPIOs on its expansion header.
+
+The driver accesses memory-mapped GPIO peripheral registers directly
+for maximum performance, but the only possible race condition is for
+the pins' modes/muxing (which is highly unlikely), so it should be
+able to coexist nicely with both sysfs bitbanging and various
+peripherals' kernel drivers. The driver restores the previous
+configuration on exit.
+
+See @file{interface/raspberrypi-native.cfg} for a sample config and
+pinout.
+
+@end deffn
+
 @section Transport Configuration
 @cindex Transport
 As noted earlier, depending on the version of OpenOCD you use,
@@ -3008,7 +3105,7 @@ version of OpenOCD.
 @deffn Command {transport select} transport_name
 Select which of the supported transports to use in this OpenOCD session.
 The transport must be supported by the debug adapter hardware and by the
-version of OPenOCD you are using (including the adapter's driver).
+version of OpenOCD you are using (including the adapter's driver).
 No arguments: returns name of session's selected transport.
 @end deffn
 
@@ -3953,7 +4050,7 @@ look like with more than one:
     TargetName         Type       Endian TapName            State
 --  ------------------ ---------- ------ ------------------ ------------
  0* at91rm9200.cpu     arm920t    little at91rm9200.cpu     running
- 1  MyTarget           cortex_m3  little mychip.foo         tap-disabled
+ 1  MyTarget           cortex_m   little mychip.foo         tap-disabled
 @end verbatim
 
 One member of that list is the @dfn{current target}, which
@@ -4064,8 +4161,8 @@ At this writing, the supported CPU types and variants are:
 @item @code{arm9tdmi} -- this is an ARMv4 core
 @item @code{avr} -- implements Atmel's 8-bit AVR instruction set.
 (Support for this is preliminary and incomplete.)
-@item @code{cortex_a8} -- this is an ARMv7 core with an MMU
-@item @code{cortex_m3} -- this is an ARMv7 core, supporting only the
+@item @code{cortex_a} -- this is an ARMv7 core with an MMU
+@item @code{cortex_m} -- this is an ARMv7 core, supporting only the
 compact Thumb2 instruction set.
 @item @code{dragonite} -- resembles arm966e
 @item @code{dsp563xx} -- implements Freescale's 24-bit DSP.
@@ -4082,6 +4179,17 @@ There are several variants defined:
 @item @code{pxa250}, @code{pxa255},
 @code{pxa26x} ... instruction register length is 5 bits
 @item @code{pxa3xx} ... instruction register length is 11 bits
+@end itemize
+@item @code{openrisc} -- this is an OpenRISC 1000 core.
+The current implementation supports two JTAG TAP cores:
+@itemize @minus
+@item @code{OpenCores TAP} (See: @emph{http://opencores.org/project,jtag})
+@item @code{Altera Virtual JTAG TAP} (See: @emph{http://www.altera.com/literature/ug/ug_virtualjtag.pdf})
+@end itemize
+And two debug interfaces cores:
+@itemize @minus
+@item @code{Advanced debug interface} (See: @emph{http://opencores.org/project,adv_debug_sys})
+@item @code{SoC Debug Interface} (See: @emph{http://opencores.org/project,dbg_interface})
 @end itemize
 @end itemize
 @end deffn
@@ -4119,7 +4227,7 @@ to be much more board-specific.
 The key steps you use might look something like this
 
 @example
-target create MyTarget cortex_m3 -chain-position mychip.cpu
+target create MyTarget cortex_m -chain-position mychip.cpu
 $MyTarget configure -work-area-phys 0x08000 -work-area-size 8096
 $MyTarget configure -event reset-deassert-pre @{ jtag_rclk 5 @}
 $MyTarget configure -event reset-init @{ myboard_reinit @}
@@ -4226,9 +4334,11 @@ base @var{address} to be used when an MMU is active.
 The value should normally correspond to a static mapping for the
 @code{-work-area-phys} address, set up by the current operating system.
 
+@anchor{rtostype}
 @item @code{-rtos} @var{rtos_type} -- enable rtos support for target,
 @var{rtos_type} can be one of @option{auto}|@option{eCos}|@option{ThreadX}|
-@option{FreeRTOS}|@option{linux}|@option{ChibiOS}.
+@option{FreeRTOS}|@option{linux}|@option{ChibiOS}|@option{embKernel}
+@xref{gdbrtossupport,,RTOS Support}.
 
 @end itemize
 @end deffn
@@ -4753,6 +4863,12 @@ specifies "to the end of the flash bank".
 The @var{num} parameter is a value shown by @command{flash banks}.
 @end deffn
 
+@deffn Command {flash padded_value} num value
+Sets the default value used for padding any image sections, This should
+normally match the flash bank erased value. If not specified by this
+comamnd or the flash driver then it defaults to 0xff.
+@end deffn
+
 @anchor{program}
 @deffn Command {program} filename [verify] [reset] [offset]
 This is a helper script that simplifies using OpenOCD as a standalone
@@ -5014,8 +5130,9 @@ supported.}
 @end deffn
 
 @deffn {Flash Driver} lpc2000
-Most members of the LPC1700 and LPC2000 microcontroller families from NXP
-include internal flash and use Cortex-M3 (LPC1700) or ARM7TDMI (LPC2000) cores.
+Most members of the LPC1700, LPC1800, LPC2000 and LPC4300 microcontroller
+families from NXP include internal flash and use Cortex-M3 (LPC1700, LPC1800),
+Cortex-M4 (LPC4300) or ARM7TDMI (LPC2000) cores.
 
 @quotation Note
 There are LPC2000 devices which are not supported by the @var{lpc2000}
@@ -5031,7 +5148,9 @@ which must appear in the following order:
 @item @var{variant} ... required, may be
 @option{lpc2000_v1} (older LPC21xx and LPC22xx)
 @option{lpc2000_v2} (LPC213x, LPC214x, LPC210[123], LPC23xx and LPC24xx)
-or @option{lpc1700} (LPC175x and LPC176x)
+@option{lpc1700} (LPC175x and LPC176x)
+or @option{lpc4300} - available also as @option{lpc1800} alias (LPC18x[2357] and
+LPC43x[2357])
 @item @var{clock_kHz} ... the frequency, in kiloHertz,
 at which the core is running
 @item @option{calc_checksum} ... optional (but you probably want to provide this!),
@@ -7297,7 +7416,7 @@ cores @emph{except the ARM1176} use the same six bits.
 @cindex Debug Access Port
 @cindex DAP
 These commands are specific to ARM architecture v7 Debug Access Port (DAP),
-included on Cortex-M3 and Cortex-A8 systems.
+included on Cortex-M and Cortex-A systems.
 They are available in addition to other core-specific commands that may be available.
 
 @deffn Command {dap apid} [num]
@@ -7330,10 +7449,10 @@ fix CSW_SPROT from register AP_REG_CSW on selected dap.
 Defaulting to 0.
 @end deffn
 
-@subsection Cortex-M3 specific commands
-@cindex Cortex-M3
+@subsection Cortex-M specific commands
+@cindex Cortex-M
 
-@deffn Command {cortex_m3 maskisr} (@option{auto}|@option{on}|@option{off})
+@deffn Command {cortex_m maskisr} (@option{auto}|@option{on}|@option{off})
 Control masking (disabling) interrupts during target step/resume.
 
 The @option{auto} option handles interrupts during stepping a way they get
@@ -7350,7 +7469,7 @@ with interrupts enabled, i.e. the same way the @option{off} option does.
 Default is @option{auto}.
 @end deffn
 
-@deffn Command {cortex_m3 vector_catch} [@option{all}|@option{none}|list]
+@deffn Command {cortex_m vector_catch} [@option{all}|@option{none}|list]
 @cindex vector_catch
 Vector Catch hardware provides dedicated breakpoints
 for certain hardware events.
@@ -7377,7 +7496,7 @@ must also be explicitly enabled.
 This finishes by listing the current vector catch configuration.
 @end deffn
 
-@deffn Command {cortex_m3 reset_config} (@option{srst}|@option{sysresetreq}|@option{vectreset})
+@deffn Command {cortex_m reset_config} (@option{srst}|@option{sysresetreq}|@option{vectreset})
 Control reset handling. The default @option{srst} is to use srst if fitted,
 otherwise fallback to @option{vectreset}.
 @itemize @minus
@@ -7385,11 +7504,56 @@ otherwise fallback to @option{vectreset}.
 @item @option{sysresetreq} use NVIC SYSRESETREQ to reset system.
 @item @option{vectreset} use NVIC VECTRESET to reset system.
 @end itemize
-Using @option{vectreset} is a safe option for all current Cortex-M3 cores.
+Using @option{vectreset} is a safe option for all current Cortex-M cores.
 This however has the disadvantage of only resetting the core, all peripherals
 are uneffected. A solution would be to use a @code{reset-init} event handler to manually reset
 the peripherals.
 @xref{targetevents,,Target Events}.
+@end deffn
+
+@section OpenRISC Architecture
+
+The OpenRISC CPU is a soft core. It is used in a programmable SoC which can be
+configured with any of the TAP / Debug Unit available.
+
+@subsection TAP and Debug Unit selection commands
+@deffn Command {tap_select} (@option{vjtag}|@option{mohor})
+Select between the Altera Virtual JTAG and Mohor TAP.
+@end deffn
+@deffn Command {du_select} (@option{adv}|@option{mohor}) [option]
+Select between the Advanced Debug Interface and the classic one.
+
+An option can be passed as a second argument to the debug unit.
+
+When using the Advanced Debug Interface, option = 1 means the RTL core is
+configured with ADBG_USE_HISPEED = 1. This configuration skips status checking
+between bytes while doing read or write bursts.
+@end deffn
+
+@subsection Registers commands
+@deffn Command {addreg} [name] [address] [feature] [reg_group]
+Add a new register in the cpu register list. This register will be
+included in the generated target descriptor file.
+
+@strong{[feature]} must be "org.gnu.gdb.or1k.group[0..10]".
+
+@strong{[reg_group]} can be anything. The default register list defines "system",
+ "dmmu", "immu", "dcache", "icache", "mac", "debug", "perf", "power", "pic"
+ and "timer" groups.
+
+@emph{example:}
+@example
+addreg rtest 0x1234 org.gnu.gdb.or1k.group0 system
+@end example
+
+
+@end deffn
+@deffn Command {readgroup} (@option{group})
+Display all registers in @emph{group}.
+
+@emph{group} can be "system",
+ "dmmu", "immu", "dcache", "icache", "mac", "debug", "perf", "power", "pic",
+ "timer" or any new group created with addreg command.
 @end deffn
 
 @anchor{softwaredebugmessagesandtracing}
@@ -7404,7 +7568,7 @@ The most powerful mechanism is semihosting, but there is also
 a lighter weight mechanism using only the DCC channel.
 
 Currently @command{target_request debugmsgs}
-is supported only for @option{arm7_9} and @option{cortex_m3} cores.
+is supported only for @option{arm7_9} and @option{cortex_m} cores.
 These messages are received as part of target polling, so
 you need to have @command{poll on} active to receive them.
 They are intrusive in that they will affect program execution
@@ -7763,6 +7927,53 @@ If @emph{xsvfdump} shows a file is using those opcodes, it
 probably will not be usable with other XSVF tools.
 
 
+@node Utility Commands
+@chapter Utility Commands
+@cindex Utility Commands
+
+@section RAM testing
+@cindex RAM testing
+
+There is often a need to stress-test random access memory (RAM) for
+errors. OpenOCD comes with a Tcl implementation of well-known memory
+testing procedures allowing to detect all sorts of issues with
+electrical wiring, defective chips, PCB layout and other common
+hardware problems.
+
+To use them you usually need to initialise your RAM controller first,
+consult your SoC's documentation to get the recommended list of
+register operations and translate them to the corresponding
+@command{mww}/@command{mwb} commands.
+
+Load the memory testing functions with
+
+@example
+source [find tools/memtest.tcl]
+@end example
+
+to get access to the following facilities:
+
+@deffn Command {memTestDataBus} address
+Test the data bus wiring in a memory region by performing a walking
+1's test at a fixed address within that region.
+@end deffn
+
+@deffn Command {memTestAddressBus} baseaddress size
+Perform a walking 1's test on the relevant bits of the address and
+check for aliasing. This test will find single-bit address failures
+such as stuck-high, stuck-low, and shorted pins.
+@end deffn
+
+@deffn Command {memTestDevice} baseaddress size
+Test the integrity of a physical memory device by performing an
+increment/decrement test over the entire region. In the process every
+storage bit in the device is tested as zero and as one.
+@end deffn
+
+@deffn Command {runAllMemTests} baseaddress size
+Run all of the above tests over a specified memory region.
+@end deffn
+
 @node TFTP
 @chapter TFTP
 @cindex TFTP
@@ -7910,10 +8121,10 @@ and an RTOS until he told GDB to disable the IRQs while stepping:
 
 @example
 define hook-step
-mon cortex_m3 maskisr on
+mon cortex_m maskisr on
 end
 define hookpost-step
-mon cortex_m3 maskisr off
+mon cortex_m maskisr off
 end
 @end example
 
@@ -8013,6 +8224,57 @@ end
 @end example
 @end itemize
 
+@section RTOS Support
+@cindex RTOS Support
+@anchor{gdbrtossupport}
+
+OpenOCD includes RTOS support, this will however need enabling as it defaults to disabled.
+It can be enabled by passing @option{-rtos} arg to the target @xref{rtostype,,RTOS Type}.
+
+@* An example setup is below:
+
+@example
+$_TARGETNAME configure -rtos auto
+@end example
+
+This will attempt to auto detect the RTOS within your application.
+
+Currently supported rtos's include:
+@itemize @bullet
+@item @option{eCos}
+@item @option{ThreadX}
+@item @option{FreeRTOS}
+@item @option{linux}
+@item @option{ChibiOS}
+@item @option{embKernel}
+@end itemize
+
+@quotation Note
+Before an RTOS can be detected it must export certain symbols otherwise it cannot be used by
+OpenOCD. Below is a list of the required symbols for each supported RTOS.
+@end quotation
+
+@table @code
+@item eCos symbols
+Cyg_Thread::thread_list, Cyg_Scheduler_Base::current_thread.
+@item ThreadX symbols
+_tx_thread_current_ptr, _tx_thread_created_ptr, _tx_thread_created_count.
+@item FreeRTOS symbols
+pxCurrentTCB, pxReadyTasksLists, xDelayedTaskList1, xDelayedTaskList2,
+pxDelayedTaskList, pxOverflowDelayedTaskList, xPendingReadyList,
+xTasksWaitingTermination, xSuspendedTaskList, uxCurrentNumberOfTasks, uxTopUsedPriority.
+@item linux symbols
+init_task.
+@item ChibiOS symbols
+rlist, ch_debug, chSysInit.
+@item embKernel symbols
+Rtos::sCurrentTask, Rtos::sListReady, Rtos::sListSleep,
+Rtos::sListSuspended, Rtos::sMaxPriorities, Rtos::sCurrentTaskCount.
+@end table
+
+For most RTOS supported the above symbols will be exported by default. However for
+some, eg. FreeRTOS @option{xTasksWaitingTermination} is only exported
+if @option{INCLUDE_vTaskDelete} is defined during the build.
 
 @node Tcl Scripting API
 @chapter Tcl Scripting API

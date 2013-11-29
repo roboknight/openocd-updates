@@ -15,13 +15,17 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifndef DSP563XX_ONCE_H
 #define DSP563XX_ONCE_H
 
 #include <jtag/jtag.h>
+
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 
 #define DSP563XX_ONCE_OCR_EX	(1<<5)
 #define DSP563XX_ONCE_OCR_GO	(1<<6)

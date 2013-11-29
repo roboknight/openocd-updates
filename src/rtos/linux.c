@@ -16,7 +16,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -226,7 +226,8 @@ static int linux_os_thread_reg_list(struct rtos *rtos,
 		/*LOG_INFO("thread %lx current on core %x",thread_id,
 		 * target->coreid);*/
 		retval =
-			target_get_gdb_reg_list(target, &reg_list, &reg_list_size);
+			target_get_gdb_reg_list(target, &reg_list, &reg_list_size,
+					REG_CLASS_GENERAL);
 
 		if (retval != ERROR_OK)
 			return retval;
@@ -498,7 +499,7 @@ int get_current(struct target *target, int create)
 		int retval;
 
 		if (target_get_gdb_reg_list(head->target, &reg_list,
-				&reg_list_size) != ERROR_OK) {
+				&reg_list_size, REG_CLASS_GENERAL) != ERROR_OK) {
 			free(buffer);
 			return ERROR_TARGET_FAILURE;
 		}
@@ -532,7 +533,7 @@ int get_current(struct target *target, int create)
 					LOG_ERROR
 						("error in linux current thread update");
 
-				if (create) {
+				if (create && ct) {
 					struct threads *t;
 					t = calloc(1, sizeof(struct threads));
 					t->base_addr = ct->TS;
@@ -1139,13 +1140,12 @@ int linux_gdb_thread_packet(struct target *target,
 	char *tmp_str = out_str;
 	tmp_str += sprintf(tmp_str, "m");
 	struct threads *temp = linux_os->thread_list;
-	tmp_str += sprintf(tmp_str, "%016" PRIx64, temp->threadid);
-	temp = temp->next;
 
 	while (temp != NULL) {
-		tmp_str += sprintf(tmp_str, ",");
 		tmp_str += sprintf(tmp_str, "%016" PRIx64, temp->threadid);
 		temp = temp->next;
+		if (temp)
+			tmp_str += sprintf(tmp_str, ",");
 	}
 
 	gdb_put_packet(connection, out_str, strlen(out_str));
@@ -1524,7 +1524,7 @@ static int linux_os_create(struct target *target)
 	os_linux->threads_needs_update = 0;
 	os_linux->threadid_count = 1;
 	os_linux->current_threads = NULL;
-	target->rtos->rtos_specific_params = (void *)os_linux;
+	target->rtos->rtos_specific_params = os_linux;
 	ct->core_id = target->coreid;
 	ct->threadid = -1;
 	ct->TS = 0xdeadbeef;

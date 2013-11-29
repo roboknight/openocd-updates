@@ -15,7 +15,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 #ifdef HAVE_CONFIG_H
 #	include "config.h"
@@ -48,7 +48,7 @@ static struct sequence *queue_add_tail(struct queue *queue, int len)
 	}
 
 	struct sequence *next;
-	next = (struct sequence *)malloc(sizeof(*next));
+	next = malloc(sizeof(*next));
 	if (next) {
 		next->tms = calloc(1, DIV_ROUND_UP(len, 8));
 		if (next->tms) {
@@ -98,7 +98,7 @@ static void queue_free(struct queue *queue)
 
 static struct queue *queue_alloc(void)
 {
-	struct queue *queue = (struct queue *)malloc(sizeof(struct queue));
+	struct queue *queue = malloc(sizeof(*queue));
 	if (queue)
 		queue->head = NULL;
 	else
@@ -130,8 +130,8 @@ static struct queue *queue_alloc(void)
 
 /* Lists of valid VID/PID pairs
  */
-static const uint16_t osbdm_vid[] = { 0x15a2, 0x15a2, 0 };
-static const uint16_t osbdm_pid[] = { 0x0042, 0x0058, 0 };
+static const uint16_t osbdm_vid[] = { 0x15a2, 0x15a2, 0x15a2, 0 };
+static const uint16_t osbdm_pid[] = { 0x0042, 0x0058, 0x005e, 0 };
 
 struct osbdm {
 	struct jtag_libusb_device_handle *devh; /* USB handle */
@@ -277,7 +277,7 @@ static int osbdm_swap(struct osbdm *osbdm, void *tms, void *tdi,
 
 	/* Copy TDO responce
 	 */
-	uint8_t *buffer = (uint8_t *)osbdm->buffer + 4;
+	uint8_t *buffer = osbdm->buffer + 4;
 	for (int bit_idx = 0; bit_idx < length; ) {
 		int bit_count = length - bit_idx;
 		if (bit_count > 16)

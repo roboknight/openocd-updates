@@ -21,7 +21,7 @@
  *   You should have received a copy of the GNU General public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
 ****************************************************************************/
 
 /* Some of the the lower level code was based on code supplied by
@@ -1002,7 +1002,7 @@ static uint32_t sam4_reg_fieldname(struct sam4_chip *pChip,
 	}
 
 	/* show the basics */
-	LOG_USER_N("\t%*s: %*d [0x%0*x] ",
+	LOG_USER_N("\t%*s: %*" PRId32 " [0x%0*" PRIx32 "] ",
 		REG_NAME_WIDTH, regname,
 		dwidth, v,
 		hwidth, v);
@@ -1227,10 +1227,10 @@ static void sam4_explain_ckgr_mcfr(struct sam4_chip *pChip)
 	v = (v * pChip->cfg.slow_freq) / 16;
 	pChip->cfg.mainosc_freq = v;
 
-	LOG_USER("(%3.03f Mhz (%d.%03dkhz slowclk)",
+	LOG_USER("(%3.03f Mhz (%" PRIu32 ".%03" PRIu32 "khz slowclk)",
 		_tomhz(v),
-		pChip->cfg.slow_freq / 1000,
-		pChip->cfg.slow_freq % 1000);
+		(uint32_t)(pChip->cfg.slow_freq / 1000),
+		(uint32_t)(pChip->cfg.slow_freq % 1000));
 }
 
 static void sam4_explain_ckgr_plla(struct sam4_chip *pChip)
@@ -1246,8 +1246,8 @@ static void sam4_explain_ckgr_plla(struct sam4_chip *pChip)
 		LOG_USER("\tPLLA Freq: (Disabled,mula = 0)");
 	else if (diva == 0)
 		LOG_USER("\tPLLA Freq: (Disabled,diva = 0)");
-	else if (diva == 1) {
-		pChip->cfg.plla_freq = (pChip->cfg.mainosc_freq * (mula + 1));
+	else if (diva >= 1) {
+		pChip->cfg.plla_freq = (pChip->cfg.mainosc_freq * (mula + 1) / diva);
 		LOG_USER("\tPLLA Freq: %3.03f MHz",
 			_tomhz(pChip->cfg.plla_freq));
 	}
@@ -1398,7 +1398,7 @@ static const struct sam4_reg_list sam4_all_regs[] = {
 
 static struct sam4_bank_private *get_sam4_bank_private(struct flash_bank *bank)
 {
-	return (struct sam4_bank_private *)(bank->driver_priv);
+	return bank->driver_priv;
 }
 
 /**
@@ -1479,7 +1479,7 @@ static int sam4_GetInfo(struct sam4_chip *pChip)
 		/* display all regs */
 		LOG_DEBUG("Start: %s", pReg->name);
 		regval = *sam4_get_reg_ptr(&(pChip->cfg), pReg);
-		LOG_USER("%*s: [0x%08x] -> 0x%08x",
+		LOG_USER("%*s: [0x%08" PRIx32 "] -> 0x%08" PRIx32,
 			REG_NAME_WIDTH,
 			pReg->name,
 			pReg->address,
@@ -1495,7 +1495,7 @@ static int sam4_GetInfo(struct sam4_chip *pChip)
 	LOG_USER(" cpu-freq: %3.03f MHz", _tomhz(pChip->cfg.cpu_freq));
 	LOG_USER("mclk-freq: %3.03f MHz", _tomhz(pChip->cfg.mclk_freq));
 
-	LOG_USER(" UniqueId: 0x%08x 0x%08x 0x%08x 0x%08x",
+	LOG_USER(" UniqueId: 0x%08" PRIx32 " 0x%08" PRIx32 " 0x%08" PRIx32 " 0x%08"PRIx32,
 		pChip->cfg.unique_id[0],
 		pChip->cfg.unique_id[1],
 		pChip->cfg.unique_id[2],
@@ -1619,7 +1619,7 @@ static int sam4_GetDetails(struct sam4_bank_private *pPrivate)
 		LOG_ERROR("SAM4 ChipID 0x%08x not found in table (perhaps you can ID this chip?)",
 			(unsigned int)(pPrivate->pChip->cfg.CHIPID_CIDR));
 		/* Help the victim, print details about the chip */
-		LOG_INFO("SAM4 CHIPID_CIDR: 0x%08x decodes as follows",
+		LOG_INFO("SAM4 CHIPID_CIDR: 0x%08" PRIx32 " decodes as follows",
 			pPrivate->pChip->cfg.CHIPID_CIDR);
 		sam4_explain_chipid_cidr(pPrivate->pChip);
 		return ERROR_FAIL;
@@ -1819,16 +1819,6 @@ static int sam4_protect(struct flash_bank *bank, int set, int first, int last)
 
 }
 
-static int sam4_info(struct flash_bank *bank, char *buf, int buf_size)
-{
-	if (bank->target->state != TARGET_HALTED) {
-		LOG_ERROR("Target not halted");
-		return ERROR_TARGET_NOT_HALTED;
-	}
-	buf[0] = 0;
-	return ERROR_OK;
-}
-
 static int sam4_page_read(struct sam4_bank_private *pPrivate, unsigned pagenum, uint8_t *buf)
 {
 	uint32_t adr;
@@ -1847,93 +1837,6 @@ static int sam4_page_read(struct sam4_bank_private *pPrivate, unsigned pagenum, 
 			(unsigned int)(adr));
 	return r;
 }
-
-/* The code below is basically this: */
-/* compiled with */
-/* arm-none-eabi-gcc -mthumb -mcpu = cortex-m3 -O9 -S ./foobar.c -o foobar.s */
-/*  */
-/* Only the *CPU* can write to the flash buffer. */
-/* the DAP cannot... so - we download this 28byte thing */
-/* Run the algorithm - (below) */
-/* to program the device */
-/*  */
-/* ======================================== */
-/* #include <stdint.h> */
-/*  */
-/* struct foo { */
-/*   uint32_t *dst; */
-/*   const uint32_t *src; */
-/*   int   n; */
-/*   volatile uint32_t *base; */
-/*   uint32_t   cmd; */
-/* }; */
-/*  */
-/*  */
-/* uint32_t sam4_function(struct foo *p) */
-/* { */
-/*   volatile uint32_t *v; */
-/*   uint32_t *d; */
-/*   const uint32_t *s; */
-/*   int   n; */
-/*   uint32_t r; */
-/*  */
-/*   d = p->dst; */
-/*   s = p->src; */
-/*   n = p->n; */
-/*  */
-/*   do { */
-/*     *d++ = *s++; */
-/*   } while (--n) */
-/*     ; */
-/*  */
-/*   v = p->base; */
-/*  */
-/*   v[ 1 ] = p->cmd; */
-/*   do { */
-/*     r = v[8/4]; */
-/*   } while (!(r&1)) */
-/*     ; */
-/*   return r; */
-/* } */
-/* ======================================== */
-
-static const uint8_t
-	sam4_page_write_opcodes[] = {
-	/*  24 0000 0446                mov	r4, r0 */
-	0x04, 0x46,
-	/*  25 0002 6168                ldr	r1, [r4, #4] */
-	0x61, 0x68,
-	/*  26 0004 0068                ldr	r0, [r0, #0] */
-	0x00, 0x68,
-	/*  27 0006 A268                ldr	r2, [r4, #8] */
-	0xa2, 0x68,
-	/*  28                          @ lr needed for prologue */
-	/*  29                  .L2: */
-	/*  30 0008 51F8043B            ldr	r3, [r1], #4 */
-	0x51, 0xf8, 0x04, 0x3b,
-	/*  31 000c 12F1FF32            adds	r2, r2, #-1 */
-	0x12, 0xf1, 0xff, 0x32,
-	/*  32 0010 40F8043B            str	r3, [r0], #4 */
-	0x40, 0xf8, 0x04, 0x3b,
-	/*  33 0014 F8D1                bne	.L2 */
-	0xf8, 0xd1,
-	/*  34 0016 E268                ldr	r2, [r4, #12] */
-	0xe2, 0x68,
-	/*  35 0018 2369                ldr	r3, [r4, #16] */
-	0x23, 0x69,
-	/*  36 001a 5360                str	r3, [r2, #4] */
-	0x53, 0x60,
-	/*  37 001c 0832                adds	r2, r2, #8 */
-	0x08, 0x32,
-	/*  38                  .L4: */
-	/*  39 001e 1068                ldr	r0, [r2, #0] */
-	0x10, 0x68,
-	/*  40 0020 10F0010F            tst	r0, #1 */
-	0x10, 0xf0, 0x01, 0x0f,
-	/*  41 0024 FBD0                beq	.L4 */
-	0xfb, 0xd0,
-	0x00, 0xBE				/* bkpt #0 */
-};
 
 static int sam4_page_write(struct sam4_bank_private *pPrivate, unsigned pagenum, uint8_t *buf)
 {
@@ -2376,5 +2279,4 @@ struct flash_driver at91sam4_flash = {
 	.auto_probe = sam4_auto_probe,
 	.erase_check = default_flash_blank_check,
 	.protect_check = sam4_protect_check,
-	.info = sam4_info,
 };

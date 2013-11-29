@@ -17,7 +17,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -599,7 +599,7 @@ int arm11_run_instr_data_to_core_noack_inner_default(struct jtag_tap *tap,
 
 	uint8_t *ReadyPos                        = Readies;
 	while (count--) {
-		chain5_fields[0].out_value      = (void *)(data++);
+		chain5_fields[0].out_value      = (uint8_t *)(data++);
 		chain5_fields[1].in_value       = ReadyPos++;
 
 		if (count > 0) {

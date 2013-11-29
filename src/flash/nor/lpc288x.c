@@ -15,7 +15,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 /***************************************************************************
@@ -350,22 +350,13 @@ static int lpc288x_write(struct flash_bank *bank, uint8_t *buffer, uint32_t offs
 			target_write_u32(target, F_CTRL, FC_CS | FC_SET_DATA | FC_WEN | FC_FUNC);
 
 			target_write_u32(target, F_CTRL, FC_CS | FC_WEN | FC_FUNC);
-			/*would be better to use the clean target_write_buffer() interface but
-			 * it seems not to be a LOT slower....
-			 * bulk_write_memory() is no quicker :(*/
-#if 1
-			if (target_write_memory(target, offset + dest_offset, 4, 128,
-					page_buffer) != ERROR_OK) {
-				LOG_ERROR("Write failed s %" PRIx32 " p %" PRIx32 "", sector, page);
-				return ERROR_FLASH_OPERATION_FAILED;
-			}
-#else
+
 			if (target_write_buffer(target, offset + dest_offset, FLASH_PAGE_SIZE,
 					page_buffer) != ERROR_OK) {
 				LOG_INFO("Write to flash buffer failed");
 				return ERROR_FLASH_OPERATION_FAILED;
 			}
-#endif
+
 			dest_offset += FLASH_PAGE_SIZE;
 			source_offset += count;
 			bytes_remaining -= count;
@@ -397,12 +388,6 @@ static int lpc288x_probe(struct flash_bank *bank)
 	retval = lpc288x_read_part_info(bank);
 	if (retval != ERROR_OK)
 		return retval;
-	return ERROR_OK;
-}
-
-static int lpc288x_info(struct flash_bank *bank, char *buf, int buf_size)
-{
-	snprintf(buf, buf_size, "lpc288x flash driver");
 	return ERROR_OK;
 }
 
@@ -450,5 +435,4 @@ struct flash_driver lpc288x_flash = {
 	.auto_probe = lpc288x_probe,
 	.erase_check = lpc288x_erase_check,
 	.protect_check = lpc288x_protect_check,
-	.info = lpc288x_info,
 };

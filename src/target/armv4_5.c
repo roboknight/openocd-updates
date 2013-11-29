@@ -21,7 +21,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -429,7 +429,11 @@ struct reg *arm_reg_current(struct arm *arm, unsigned regnum)
 	if (regnum > 16)
 		return NULL;
 
-	r = arm->core_cache->reg_list + arm->map[regnum];
+	if (!arm->map) {
+		LOG_ERROR("Register map is not available yet, the target is not fully initialised");
+		r = arm->core_cache->reg_list + regnum;
+	} else
+		r = arm->core_cache->reg_list + arm->map[regnum];
 
 	/* e.g. invalid CPSR said "secure monitor" mode on a core
 	 * that doesn't support it...
@@ -1047,7 +1051,8 @@ const struct command_registration arm_command_handlers[] = {
 };
 
 int arm_get_gdb_reg_list(struct target *target,
-	struct reg **reg_list[], int *reg_list_size)
+	struct reg **reg_list[], int *reg_list_size,
+	enum target_register_class reg_class)
 {
 	struct arm *arm = target_to_arm(target);
 	int i;

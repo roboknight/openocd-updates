@@ -21,7 +21,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -505,7 +505,7 @@ static int em357_write_block(struct flash_bank *bank, uint8_t *buffer,
 	;
 
 	retval = target_write_buffer(target, write_algorithm->address,
-			sizeof(em357_flash_write_code), (uint8_t *)em357_flash_write_code);
+			sizeof(em357_flash_write_code), em357_flash_write_code);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -751,13 +751,6 @@ static int em357_auto_probe(struct flash_bank *bank)
 	return em357_probe(bank);
 }
 
-
-static int get_em357_info(struct flash_bank *bank, char *buf, int buf_size)
-{
-	snprintf(buf, buf_size, "em357\n");
-	return ERROR_OK;
-}
-
 COMMAND_HANDLER(em357_handle_lock_command)
 {
 	struct target *target = NULL;
@@ -946,5 +939,4 @@ struct flash_driver em357_flash = {
 	.auto_probe = em357_auto_probe,
 	.erase_check = default_flash_blank_check,
 	.protect_check = em357_protect_check,
-	.info = get_em357_info,
 };

@@ -18,7 +18,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifndef FLASH_NOR_CORE_H
@@ -86,6 +86,10 @@ struct flash_bank {
 
 	int chip_width; /**< Width of the chip in bytes (1,2,4 bytes) */
 	int bus_width; /**< Maximum bus width, in bytes (1,2,4 bytes) */
+
+	/** Default padded value used, normally this matches the  flash
+	 * erased value. Defaults to 0xFF. */
+	uint8_t default_padded_value;
 
 	/**
 	 * The number of sectors on this chip.  This value will

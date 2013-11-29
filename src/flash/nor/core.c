@@ -18,7 +18,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -595,7 +595,7 @@ int flash_write_unlock(struct target *target, struct image *image,
 		if (retval != ERROR_OK)
 			goto done;
 		if (c == NULL) {
-			LOG_WARNING("no flash bank found for address %x", run_address);
+			LOG_WARNING("no flash bank found for address %" PRIx32, run_address);
 			section++;	/* and skip it */
 			section_offset = 0;
 			continue;
@@ -710,7 +710,7 @@ int flash_write_unlock(struct target *target, struct image *image,
 
 			/* see if we need to pad the section */
 			while (padding[section]--)
-				(buffer + buffer_size)[size_read++] = 0xff;
+				(buffer + buffer_size)[size_read++] = c->default_padded_value;
 
 			buffer_size += size_read;
 			section_offset += size_read;

@@ -18,7 +18,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifndef CONFIGURATION_H
@@ -40,5 +40,6 @@ int configuration_output_handler(struct command_context *cmd_ctx,
 FILE *open_file_from_path(const char *file, const char *mode);
 
 char *find_file(const char *name);
+char *get_home_dir(const char *append_path);
 
 #endif	/* CONFIGURATION_H */

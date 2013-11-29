@@ -21,7 +21,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -361,15 +361,6 @@ static int arm11_arch_state(struct target *target)
 			(unsigned) arm11->dpm.wp_pc);
 
 	return retval;
-}
-
-/* target request support */
-static int arm11_target_request_data(struct target *target,
-	uint32_t size, uint8_t *buffer)
-{
-	LOG_WARNING("Not implemented: %s", __func__);
-
-	return ERROR_FAIL;
 }
 
 /* target execution control */
@@ -771,13 +762,6 @@ static int arm11_deassert_reset(struct target *target)
 	return ERROR_OK;
 }
 
-static int arm11_soft_reset_halt(struct target *target)
-{
-	LOG_WARNING("Not implemented: %s", __func__);
-
-	return ERROR_FAIL;
-}
-
 /* target memory access
  * size: 1 = byte (8bit), 2 = half-word (16bit), 4 = word (32bit)
  * count: number of items of <size>
@@ -1094,6 +1078,7 @@ static int arm11_target_create(struct target *target, Jim_Interp *interp)
 	if (!arm11)
 		return ERROR_FAIL;
 
+	arm11->arm.core_type = ARM_MODE_ANY;
 	arm_init_arch_info(target, &arm11->arm);
 
 	arm11->jtag_info.tap = target->tap;
@@ -1339,15 +1324,12 @@ struct target_type arm11_target = {
 	.poll = arm11_poll,
 	.arch_state = arm11_arch_state,
 
-	.target_request_data = arm11_target_request_data,
-
 	.halt = arm11_halt,
 	.resume = arm11_resume,
 	.step = arm11_step,
 
 	.assert_reset = arm11_assert_reset,
 	.deassert_reset = arm11_deassert_reset,
-	.soft_reset_halt = arm11_soft_reset_halt,
 
 	.get_gdb_reg_list = arm_get_gdb_reg_list,
 

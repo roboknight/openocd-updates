@@ -16,7 +16,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -195,7 +195,7 @@ static int fm3_busy_wait(struct target *target, uint32_t offset, int timeout_ms)
 	}
 
 	if (retval == ERROR_OK)
-		LOG_DEBUG("fm3_busy_wait(%x) needs about %d ms", offset, ms);
+		LOG_DEBUG("fm3_busy_wait(%" PRIx32 ") needs about %d ms", offset, ms);
 
 	return retval;
 }
@@ -229,7 +229,7 @@ static int fm3_erase(struct flash_bank *bank, int first, int last)
 		return ERROR_TARGET_NOT_HALTED;
 	}
 
-	LOG_INFO("Fujitsu MB9Bxxx: Sector Erase ... (%d to %d)", first, last);
+	LOG_INFO("Fujitsu MB9[A/B]FXXX: Sector Erase ... (%d to %d)", first, last);
 
 	/* FASZR = 0x01, Enables CPU Programming Mode (16-bit Flash acccess) */
 	retval = target_write_u32(target, 0x40000000, 0x0001);
@@ -296,7 +296,7 @@ static int fm3_write_block(struct flash_bank *bank, uint8_t *buffer,
 {
 	struct fm3_flash_bank *fm3_info = bank->driver_priv;
 	struct target *target = bank->target;
-	uint32_t buffer_size = 2048;		/* 8192 for MB9Bxx6! */
+	uint32_t buffer_size = 2048;		/* Default minimum value */
 	struct working_area *write_algorithm;
 	struct working_area *source;
 	uint32_t address = bank->base + offset;
@@ -306,6 +306,10 @@ static int fm3_write_block(struct flash_bank *bank, uint8_t *buffer,
 	uint32_t u32FlashType;
 	uint32_t u32FlashSeqAddress1;
 	uint32_t u32FlashSeqAddress2;
+
+	/* Increase buffer_size if needed */
+	if (buffer_size < (target->working_area_size / 2))
+		buffer_size = (target->working_area_size / 2);
 
 	u32FlashType = (uint32_t) fm3_info->flashtype;
 
@@ -446,13 +450,14 @@ static int fm3_write_block(struct flash_bank *bank, uint8_t *buffer,
 	0x00, 0xBE,					/*        BKPT     #0                         */
 
 	/* The following address pointers assume, that the code is running from   */
-	/* address 0x1FFF8008. These address pointers will be patched, if a       */
+	/* SRAM basic-address + 8.These address pointers will be patched, if a    */
 	/* different start address in RAM is used (e.g. for Flash type 2)!        */
-	0x00, 0x80, 0xFF, 0x1F,     /* u32DummyRead address in RAM (0x1FFF8000)   */
-	0x04, 0x80, 0xFF, 0x1F      /* u32FlashResult address in RAM (0x1FFF8004) */
+	/* Default SRAM basic-address is 0x20000000.                              */
+	0x00, 0x00, 0x00, 0x20,     /* u32DummyRead address in RAM (0x20000000)   */
+	0x04, 0x00, 0x00, 0x20      /* u32FlashResult address in RAM (0x20000004) */
 	};
 
-	LOG_INFO("Fujitsu MB9B500: FLASH Write ...");
+	LOG_INFO("Fujitsu MB9[A/B]FXXX: FLASH Write ...");
 
 	/* disable HW watchdog */
 	retval = target_write_u32(target, 0x40011C00, 0x1ACCE551);
@@ -475,15 +480,27 @@ static int fm3_write_block(struct flash_bank *bank, uint8_t *buffer,
 		return ERROR_FLASH_DST_BREAKS_ALIGNMENT;
 	}
 
-	/* allocate working area with flash programming code */
-	if (target_alloc_working_area(target, sizeof(fm3_flash_write_code),
+	/* allocate working area and variables with flash programming code */
+	if (target_alloc_working_area(target, sizeof(fm3_flash_write_code) + 8,
 			&write_algorithm) != ERROR_OK) {
 		LOG_WARNING("no working area available, can't do block memory writes");
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
-	retval = target_write_buffer(target, write_algorithm->address,
+	retval = target_write_buffer(target, write_algorithm->address + 8,
 		sizeof(fm3_flash_write_code), fm3_flash_write_code);
+	if (retval != ERROR_OK)
+		return retval;
+
+	/* Patching 'local variable address' */
+	/* Algorithm: u32DummyRead: */
+	retval = target_write_u32(target, (write_algorithm->address + 8)
+			+ sizeof(fm3_flash_write_code) - 8, (write_algorithm->address));
+	if (retval != ERROR_OK)
+		return retval;
+	/* Algorithm: u32FlashResult: */
+	retval = target_write_u32(target, (write_algorithm->address + 8)
+			+ sizeof(fm3_flash_write_code) - 4, (write_algorithm->address) + 4);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -516,26 +533,6 @@ static int fm3_write_block(struct flash_bank *bank, uint8_t *buffer,
 	while (count > 0) {
 		uint32_t thisrun_count = (count > (buffer_size / 2)) ? (buffer_size / 2) : count;
 
-		retval = target_write_buffer(target, write_algorithm->address, 8,
-				fm3_flash_write_code);
-		if (retval != ERROR_OK)
-			break;
-
-		/* Patching 'local variable address' for different RAM addresses */
-		if (write_algorithm->address != 0x1FFF8008) {
-			/* Algorithm: u32DummyRead: */
-			retval = target_write_u32(target, (write_algorithm->address)
-				+ sizeof(fm3_flash_write_code) - 8, (write_algorithm->address) - 8);
-			if (retval != ERROR_OK)
-				break;
-
-			/* Algorithm: u32FlashResult: */
-			retval = target_write_u32(target, (write_algorithm->address)
-				+ sizeof(fm3_flash_write_code) - 4, (write_algorithm->address) - 4);
-			if (retval != ERROR_OK)
-				break;
-		}
-
 		retval = target_write_buffer(target, source->address, thisrun_count * 2, buffer);
 		if (retval != ERROR_OK)
 			break;
@@ -547,7 +544,7 @@ static int fm3_write_block(struct flash_bank *bank, uint8_t *buffer,
 		buf_set_u32(reg_params[4].value, 0, 32, u32FlashSeqAddress2);
 
 		retval = target_run_algorithm(target, 0, NULL, 6, reg_params,
-				write_algorithm->address, 0, 1000, &armv7m_info);
+				(write_algorithm->address + 8), 0, 1000, &armv7m_info);
 		if (retval != ERROR_OK) {
 			LOG_ERROR("Error executing fm3 Flash programming algorithm");
 			retval = ERROR_FLASH_OPERATION_FAILED;
@@ -555,7 +552,7 @@ static int fm3_write_block(struct flash_bank *bank, uint8_t *buffer,
 		}
 
 		if (buf_get_u32(reg_params[5].value, 0, 32) != ERROR_OK) {
-			LOG_ERROR("Fujitsu MB9[A/B]FXXX: Flash programming ERROR (Timeout) -> Reg R3: %x",
+			LOG_ERROR("Fujitsu MB9[A/B]FXXX: Flash programming ERROR (Timeout) -> Reg R3: %" PRIx32,
 				buf_get_u32(reg_params[5].value, 0, 32));
 			retval = ERROR_FLASH_OPERATION_FAILED;
 			break;
@@ -758,12 +755,6 @@ static int fm3_auto_probe(struct flash_bank *bank)
 	return fm3_probe(bank);
 }
 
-static int fm3_info(struct flash_bank *bank, char *buf, int buf_size)
-{
-	snprintf(buf, buf_size, "Fujitsu fm3 Device does not support Chip-ID (Type unknown)");
-	return ERROR_OK;
-}
-
 /* Chip erase */
 static int fm3_chip_erase(struct flash_bank *bank)
 {
@@ -795,9 +786,7 @@ static int fm3_chip_erase(struct flash_bank *bank)
 		return ERROR_TARGET_NOT_HALTED;
 	}
 
-	LOG_INFO("Fujitsu MB9[AB]xxx: Chip Erase ... (may take several seconds)");
-
-	/* Implement Flash chip erase (mass erase) completely on host */
+	LOG_INFO("Fujitsu MB9[A/B]xxx: Chip Erase ... (may take several seconds)");
 
 	/* FASZR = 0x01, Enables CPU Programming Mode (16-bit Flash access) */
 	retval = target_write_u32(target, 0x40000000, 0x0001);
@@ -905,5 +894,4 @@ struct flash_driver fm3_flash = {
 	.probe = fm3_probe,
 	.auto_probe = fm3_auto_probe,
 	.erase_check = default_flash_blank_check,
-	.info = fm3_info,
 };

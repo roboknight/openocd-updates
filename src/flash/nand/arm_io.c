@@ -17,7 +17,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the
  * Free Software Foundation, Inc.,
- * 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 #ifdef HAVE_CONFIG_H
@@ -48,7 +48,6 @@ static int arm_code_to_working_area(struct target *target,
 	unsigned additional, struct working_area **area)
 {
 	uint8_t code_buf[code_size];
-	unsigned i;
 	int retval;
 	unsigned size = code_size + additional;
 
@@ -67,8 +66,7 @@ static int arm_code_to_working_area(struct target *target,
 	}
 
 	/* buffer code in target endianness */
-	for (i = 0; i < code_size / 4; i++)
-		target_buffer_set_u32(target, code_buf + i * 4, code[i]);
+	target_buffer_set_u32_array(target, code_buf, code_size / 4, code);
 
 	/* copy code to work area */
 	retval = target_write_memory(target, (*area)->address,

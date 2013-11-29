@@ -24,7 +24,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -85,7 +85,7 @@
 
 struct efm32x_flash_bank {
 	int probed;
-	uint8_t lb_page[LOCKBITS_PAGE_SZ];
+	uint32_t lb_page[LOCKBITS_PAGE_SZ/4];
 };
 
 struct efm32_info {
@@ -292,7 +292,7 @@ static int efm32x_erase_page(struct flash_bank *bank, uint32_t addr)
 	int ret = 0;
 	uint32_t status = 0;
 
-	LOG_DEBUG("erasing flash page at 0x%08x", addr);
+	LOG_DEBUG("erasing flash page at 0x%08" PRIx32, addr);
 
 	ret = target_write_u32(bank->target, EFM32_MSC_ADDRB, addr);
 	if (ERROR_OK != ret)
@@ -307,13 +307,13 @@ static int efm32x_erase_page(struct flash_bank *bank, uint32_t addr)
 	if (ERROR_OK != ret)
 		return ret;
 
-	LOG_DEBUG("status 0x%x", status);
+	LOG_DEBUG("status 0x%" PRIx32, status);
 
 	if (status & EFM32_MSC_STATUS_LOCKED_MASK) {
 		LOG_ERROR("Page is locked");
 		return ERROR_FAIL;
 	} else if (status & EFM32_MSC_STATUS_INVADDR_MASK) {
-		LOG_ERROR("Invalid address 0x%x", addr);
+		LOG_ERROR("Invalid address 0x%" PRIx32, addr);
 		return ERROR_FAIL;
 	}
 
@@ -370,7 +370,7 @@ static int efm32x_read_lock_data(struct flash_bank *bank)
 	data_size = bank->num_sectors / 8; /* number of data bytes */
 	data_size /= 4; /* ...and data dwords */
 
-	ptr = (uint32_t *)efm32x_info->lb_page;
+	ptr = efm32x_info->lb_page;
 
 	for (i = 0; i < data_size; i++, ptr++) {
 		ret = target_read_u32(target, EFM32_MSC_LOCK_BITS+i*4, ptr);
@@ -383,7 +383,7 @@ static int efm32x_read_lock_data(struct flash_bank *bank)
 	/* also, read ULW, DLW and MLW */
 
 	/* ULW, word 126 */
-	ptr = ((uint32_t *)efm32x_info->lb_page) + 126;
+	ptr = efm32x_info->lb_page + 126;
 	ret = target_read_u32(target, EFM32_MSC_LOCK_BITS+126*4, ptr);
 	if (ERROR_OK != ret) {
 		LOG_ERROR("Failed to read ULW");
@@ -391,7 +391,7 @@ static int efm32x_read_lock_data(struct flash_bank *bank)
 	}
 
 	/* DLW, word 127 */
-	ptr = ((uint32_t *)efm32x_info->lb_page) + 127;
+	ptr = efm32x_info->lb_page + 127;
 	ret = target_read_u32(target, EFM32_MSC_LOCK_BITS+127*4, ptr);
 	if (ERROR_OK != ret) {
 		LOG_ERROR("Failed to read DLW");
@@ -399,7 +399,7 @@ static int efm32x_read_lock_data(struct flash_bank *bank)
 	}
 
 	/* MLW, word 125, present in GG and LG */
-	ptr = ((uint32_t *)efm32x_info->lb_page) + 125;
+	ptr = efm32x_info->lb_page + 125;
 	ret = target_read_u32(target, EFM32_MSC_LOCK_BITS+125*4, ptr);
 	if (ERROR_OK != ret) {
 		LOG_ERROR("Failed to read MLW");
@@ -420,14 +420,14 @@ static int efm32x_write_lock_data(struct flash_bank *bank)
 		return ret;
 	}
 
-	return efm32x_write(bank, efm32x_info->lb_page, EFM32_MSC_LOCK_BITS,
+	return efm32x_write(bank, (uint8_t *)efm32x_info->lb_page, EFM32_MSC_LOCK_BITS,
 		LOCKBITS_PAGE_SZ);
 }
 
 static int efm32x_get_page_lock(struct flash_bank *bank, size_t page)
 {
 	struct efm32x_flash_bank *efm32x_info = bank->driver_priv;
-	uint32_t dw = ((uint32_t *)efm32x_info->lb_page)[page >> 5];
+	uint32_t dw = efm32x_info->lb_page[page >> 5];
 	uint32_t mask = 0;
 
 	mask = 1 << (page & 0x1f);
@@ -438,7 +438,7 @@ static int efm32x_get_page_lock(struct flash_bank *bank, size_t page)
 static int efm32x_set_page_lock(struct flash_bank *bank, size_t page, int set)
 {
 	struct efm32x_flash_bank *efm32x_info = bank->driver_priv;
-	uint32_t *dw = &((uint32_t *)efm32x_info->lb_page)[page >> 5];
+	uint32_t *dw = &efm32x_info->lb_page[page >> 5];
 	uint32_t mask = 0;
 
 	mask = 1 << (page & 0x1f);
@@ -578,8 +578,7 @@ static int efm32x_write_block(struct flash_bank *bank, uint8_t *buf,
 	};
 
 	ret = target_write_buffer(target, write_algorithm->address,
-		sizeof(efm32x_flash_write_code),
-		(uint8_t *)efm32x_flash_write_code);
+			sizeof(efm32x_flash_write_code), efm32x_flash_write_code);
 	if (ret != ERROR_OK)
 		return ret;
 
@@ -681,13 +680,13 @@ static int efm32x_write_word(struct flash_bank *bank, uint32_t addr,
 	if (ERROR_OK != ret)
 		return ret;
 
-	LOG_DEBUG("status 0x%x", status);
+	LOG_DEBUG("status 0x%" PRIx32, status);
 
 	if (status & EFM32_MSC_STATUS_LOCKED_MASK) {
 		LOG_ERROR("Page is locked");
 		return ERROR_FAIL;
 	} else if (status & EFM32_MSC_STATUS_INVADDR_MASK) {
-		LOG_ERROR("Invalid address 0x%x", addr);
+		LOG_ERROR("Invalid address 0x%" PRIx32, addr);
 		return ERROR_FAIL;
 	}
 
@@ -747,7 +746,7 @@ static int efm32x_write(struct flash_bank *bank, uint8_t *buffer,
 				"for padding buffer");
 			return ERROR_FAIL;
 		}
-		LOG_INFO("odd number of bytes to write (%d), extending to %d "
+		LOG_INFO("odd number of bytes to write (%" PRIu32 "), extending to %" PRIu32 " "
 			"and padding with 0xff", old_count, count);
 		memset(buffer, 0xff, count);
 		buffer = memcpy(new_buffer, buffer, old_count);

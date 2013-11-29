@@ -18,7 +18,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 /***************************************************************************
@@ -1042,7 +1042,7 @@ static int stellaris_write_block(struct flash_bank *bank,
 
 	target_write_buffer(target, write_algorithm->address,
 			sizeof(stellaris_write_code),
-			(uint8_t *) stellaris_write_code);
+			stellaris_write_code);
 
 	armv7m_info.common_magic = ARMV7M_COMMON_MAGIC;
 	armv7m_info.core_mode = ARM_MODE_THREAD;

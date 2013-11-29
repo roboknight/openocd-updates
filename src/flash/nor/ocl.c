@@ -15,7 +15,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -321,11 +321,6 @@ static int ocl_probe(struct flash_bank *bank)
 	return ERROR_OK;
 }
 
-static int ocl_info(struct flash_bank *bank, char *buf, int buf_size)
-{
-	return ERROR_OK;
-}
-
 static int ocl_auto_probe(struct flash_bank *bank)
 {
 	struct ocl_priv *ocl = bank->driver_priv;
@@ -346,6 +341,5 @@ struct flash_driver ocl_flash = {
 	.probe = ocl_probe,
 	.erase_check = ocl_erase_check,
 	.protect_check = ocl_protect_check,
-	.info = ocl_info,
 	.auto_probe = ocl_auto_probe,
 };

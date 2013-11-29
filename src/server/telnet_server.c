@@ -21,7 +21,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -30,8 +30,9 @@
 
 #include "telnet_server.h"
 #include <target/target_request.h>
+#include <helper/configuration.h>
 
-static const char *telnet_port;
+static char *telnet_port;
 
 static char *negotiate =
 	"\xFF\xFB\x03"			/* IAC WILL Suppress Go Ahead */
@@ -40,6 +41,7 @@ static char *negotiate =
 	"\xFF\xFE\x01";			/* IAC DON'T Echo */
 
 #define CTRL(c) (c - '@')
+#define TELNET_HISTORY	".openocd_history"
 
 /* The only way we can detect that the socket is closed is the first time
  * we write to it, we will fail. Subsequent write operations will
@@ -127,6 +129,82 @@ static void telnet_log_callback(void *priv, const char *file, unsigned line,
 		telnet_write(connection, "\b", 1);
 }
 
+static void telnet_load_history(struct telnet_connection *t_con)
+{
+	FILE *histfp;
+	char buffer[TELNET_BUFFER_SIZE];
+	int i = 0;
+
+	char *history = get_home_dir(TELNET_HISTORY);
+
+	if (history == NULL) {
+		LOG_INFO("unable to get user home directory, telnet history will be disabled");
+		return;
+	}
+
+	histfp = fopen(history, "rb");
+
+	if (histfp) {
+
+		while (fgets(buffer, sizeof(buffer), histfp) != NULL) {
+
+			char *p = strchr(buffer, '\n');
+			if (p)
+				*p = '\0';
+			if (buffer[0] && i < TELNET_LINE_HISTORY_SIZE)
+				t_con->history[i++] = strdup(buffer);
+		}
+
+		t_con->next_history = i;
+		t_con->next_history %= TELNET_LINE_HISTORY_SIZE;
+		/* try to set to last entry - 1, that way we skip over any exit/shutdown cmds */
+		t_con->current_history = t_con->next_history > 0 ? i - 1 : 0;
+		fclose(histfp);
+	}
+
+	free(history);
+}
+
+static void telnet_save_history(struct telnet_connection *t_con)
+{
+	FILE *histfp;
+	int i;
+	int num;
+
+	char *history = get_home_dir(TELNET_HISTORY);
+
+	if (history == NULL) {
+		LOG_INFO("unable to get user home directory, telnet history will be disabled");
+		return;
+	}
+
+	histfp = fopen(history, "wb");
+
+	if (histfp) {
+
+		num = TELNET_LINE_HISTORY_SIZE;
+		i = t_con->current_history + 1;
+		i %= TELNET_LINE_HISTORY_SIZE;
+
+		while (t_con->history[i] == NULL && num > 0) {
+			i++;
+			i %= TELNET_LINE_HISTORY_SIZE;
+			num--;
+		}
+
+		if (num > 0) {
+			for (; num > 0; num--) {
+				fprintf(histfp, "%s\n", t_con->history[i]);
+				i++;
+				i %= TELNET_LINE_HISTORY_SIZE;
+			}
+		}
+		fclose(histfp);
+	}
+
+	free(history);
+}
+
 static int telnet_new_connection(struct connection *connection)
 {
 	struct telnet_connection *telnet_connection = malloc(sizeof(struct telnet_connection));
@@ -164,6 +242,7 @@ static int telnet_new_connection(struct connection *connection)
 		telnet_connection->history[i] = NULL;
 	telnet_connection->next_history = 0;
 	telnet_connection->current_history = 0;
+	telnet_load_history(telnet_connection);
 
 	log_add_callback(telnet_log_callback, connection);
 
@@ -185,6 +264,39 @@ static void telnet_clear_line(struct connection *connection,
 		t_con->line_size--;
 	}
 	t_con->line_cursor = 0;
+}
+
+static void telnet_history_go(struct connection *connection, int idx)
+{
+	struct telnet_connection *t_con = connection->priv;
+
+	if (t_con->history[idx]) {
+		telnet_clear_line(connection, t_con);
+		t_con->line_size = strlen(t_con->history[idx]);
+		t_con->line_cursor = t_con->line_size;
+		memcpy(t_con->line, t_con->history[idx], t_con->line_size);
+		telnet_write(connection, t_con->line, t_con->line_size);
+		t_con->current_history = idx;
+	}
+	t_con->state = TELNET_STATE_DATA;
+}
+
+static void telnet_history_up(struct connection *connection)
+{
+	struct telnet_connection *t_con = connection->priv;
+
+	int last_history = (t_con->current_history > 0) ?
+				t_con->current_history - 1 :
+				TELNET_LINE_HISTORY_SIZE-1;
+	telnet_history_go(connection, last_history);
+}
+
+static void telnet_history_down(struct connection *connection)
+{
+	struct telnet_connection *t_con = connection->priv;
+
+	int next_history = (t_con->current_history + 1) % TELNET_LINE_HISTORY_SIZE;
+	telnet_history_go(connection, next_history);
 }
 
 static int telnet_input(struct connection *connection)
@@ -306,6 +418,9 @@ static int telnet_input(struct connection *connection)
 							/* to suppress prompt in log callback during command execution */
 							t_con->line_cursor = -1;
 
+							if (strcmp(t_con->line, "shutdown") == 0)
+								telnet_save_history(t_con);
+
 							retval = command_run_line(command_context, t_con->line);
 
 							t_con->line_cursor = 0;
@@ -359,7 +474,11 @@ static int telnet_input(struct connection *connection)
 							if (t_con->line_cursor < t_con->line_size)
 								telnet_write(connection, t_con->line + t_con->line_cursor++, 1);
 							t_con->state = TELNET_STATE_DATA;
-						} else
+						} else if (*buf_p == CTRL('P'))		/* cursor up */
+							telnet_history_up(connection);
+						else if (*buf_p == CTRL('N'))		/* cursor down */
+							telnet_history_down(connection);
+						else
 							LOG_DEBUG("unhandled nonprintable: %2.2x", *buf_p);
 					}
 				}
@@ -404,28 +523,9 @@ static int telnet_input(struct connection *connection)
 									t_con->line + t_con->line_cursor++, 1);
 						t_con->state = TELNET_STATE_DATA;
 					} else if (*buf_p == 'A') {	/* cursor up */
-						int last_history = (t_con->current_history > 0) ?
-								t_con->current_history - 1 : TELNET_LINE_HISTORY_SIZE-1;
-						if (t_con->history[last_history]) {
-							telnet_clear_line(connection, t_con);
-							t_con->line_size = strlen(t_con->history[last_history]);
-							t_con->line_cursor = t_con->line_size;
-							memcpy(t_con->line, t_con->history[last_history], t_con->line_size);
-							telnet_write(connection, t_con->line, t_con->line_size);
-							t_con->current_history = last_history;
-						}
-						t_con->state = TELNET_STATE_DATA;
+						telnet_history_up(connection);
 					} else if (*buf_p == 'B') {	/* cursor down */
-						int next_history = (t_con->current_history + 1) % TELNET_LINE_HISTORY_SIZE;
-						if (t_con->history[next_history]) {
-							telnet_clear_line(connection, t_con);
-							t_con->line_size = strlen(t_con->history[next_history]);
-							t_con->line_cursor = t_con->line_size;
-							memcpy(t_con->line, t_con->history[next_history], t_con->line_size);
-							telnet_write(connection, t_con->line, t_con->line_size);
-							t_con->current_history = next_history;
-						}
-						t_con->state = TELNET_STATE_DATA;
+						telnet_history_down(connection);
 					} else if (*buf_p == '3')
 						t_con->last_escape = *buf_p;
 					else
@@ -489,6 +589,9 @@ static int telnet_connection_closed(struct connection *connection)
 		free(t_con->prompt);
 		t_con->prompt = NULL;
 	}
+
+	/* save telnet history */
+	telnet_save_history(t_con);
 
 	for (i = 0; i < TELNET_LINE_HISTORY_SIZE; i++) {
 		if (t_con->history[i]) {

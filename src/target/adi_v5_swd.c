@@ -15,7 +15,7 @@
  *   You should have received a copy of the GNU General Public License
  *   along with this program; if not, write to the
  *   Free Software Foundation, Inc.,
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  ***************************************************************************/
 
 /**
@@ -209,7 +209,7 @@ COMMAND_HANDLER(handle_swd_wcr)
 		}
 
 		command_print(CMD_CTX,
-			"turnaround=%d, prescale=%d",
+			"turnaround=%" PRIu32 ", prescale=%" PRIu32,
 			WCR_TO_TRN(wcr),
 			WCR_TO_PRESCALE(wcr));
 	return ERROR_OK;
@@ -330,7 +330,7 @@ static int swd_init(struct command_context *ctx)
 	status = swd_queue_idcode_read(dap, &ack, &idcode);
 
 	if (status == ERROR_OK)
-		LOG_INFO("SWD IDCODE %#8.8x", idcode);
+		LOG_INFO("SWD IDCODE %#8.8" PRIx32, idcode);
 
 	return status;
 

@@ -17,7 +17,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -313,13 +313,6 @@ static int avr32_ap7k_deassert_reset(struct target *target)
 	return ERROR_OK;
 }
 
-static int avr32_ap7k_soft_reset_halt(struct target *target)
-{
-	LOG_ERROR("%s: implement me", __func__);
-
-	return ERROR_OK;
-}
-
 static int avr32_ap7k_resume(struct target *target, int current,
 	uint32_t address, int handle_breakpoints, int debug_execution)
 {
@@ -551,7 +544,7 @@ static int avr32_ap7k_examine(struct target *target)
 	if (!target_was_examined(target)) {
 		target_set_examined(target);
 		avr32_jtag_nexus_read(&ap7k->jtag, AVR32_OCDREG_DID, &devid);
-		LOG_INFO("device id: %08x", devid);
+		LOG_INFO("device id: %08" PRIx32, devid);
 		avr32_ocd_setbits(&ap7k->jtag, AVR32_OCDREG_DC, OCDREG_DC_DBE);
 		avr32_jtag_nexus_read(&ap7k->jtag, AVR32_OCDREG_DS, &ds);
 
@@ -576,7 +569,8 @@ int avr32_ap7k_arch_state(struct target *target)
 	return ERROR_OK;
 }
 
-int avr32_ap7k_get_gdb_reg_list(struct target *target, struct reg **reg_list[], int *reg_list_size)
+int avr32_ap7k_get_gdb_reg_list(struct target *target, struct reg **reg_list[],
+		int *reg_list_size, enum target_register_class reg_class)
 {
 #if 0
 	/* get pointers to arch-specific information */
@@ -599,15 +593,11 @@ int avr32_ap7k_get_gdb_reg_list(struct target *target, struct reg **reg_list[], 
 	return ERROR_FAIL;
 }
 
-
-
 struct target_type avr32_ap7k_target = {
 	.name = "avr32_ap7k",
 
 	.poll = avr32_ap7k_poll,
 	.arch_state = avr32_ap7k_arch_state,
-
-	.target_request_data = NULL,
 
 	.halt = avr32_ap7k_halt,
 	.resume = avr32_ap7k_resume,
@@ -615,7 +605,6 @@ struct target_type avr32_ap7k_target = {
 
 	.assert_reset = avr32_ap7k_assert_reset,
 	.deassert_reset = avr32_ap7k_deassert_reset,
-	.soft_reset_halt = avr32_ap7k_soft_reset_halt,
 
 	.get_gdb_reg_list = avr32_ap7k_get_gdb_reg_list,
 

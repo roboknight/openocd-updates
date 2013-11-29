@@ -6,6 +6,9 @@ else
 OOCD_TRACE_FILES =
 endif
 
+SUBDIRS = openrisc
+libtarget_la_LIBADD = $(top_builddir)/src/target/openrisc/libopenrisc.la
+
 BIN2C		= $(top_builddir)/src/helper/bin2char$(EXEEXT_FOR_BUILD)
 
 DEBUG_HANDLER	= $(srcdir)/xscale/debug_handler.bin
@@ -31,6 +34,7 @@ libtarget_la_SOURCES = \
 	$(ARM_MISC_SRC) \
 	$(AVR32_SRC) \
 	$(MIPS32_SRC) \
+	$(NDS32_SRC) \
 	avrt.c \
 	dsp563xx.c \
 	dsp563xx_once.c \
@@ -107,6 +111,18 @@ MIPS32_SRC = \
 	mips32_dmaacc.c \
 	mips_ejtag.c
 
+NDS32_SRC = \
+	nds32.c \
+	nds32_reg.c \
+	nds32_cmd.c \
+	nds32_disassembler.c \
+	nds32_tlb.c \
+	nds32_v2.c \
+	nds32_v3_common.c \
+	nds32_v3.c \
+	nds32_v3m.c \
+	nds32_aice.c
+
 
 noinst_HEADERS = \
 	algorithm.h \
@@ -162,7 +178,19 @@ noinst_HEADERS = \
 	avr32_ap7k.h \
 	avr32_jtag.h \
 	avr32_mem.h \
-	avr32_regs.h
+	avr32_regs.h \
+	nds32.h \
+	nds32_cmd.h \
+	nds32_disassembler.h \
+	nds32_edm.h \
+	nds32_insn.h \
+	nds32_reg.h \
+	nds32_tlb.h \
+	nds32_v2.h \
+	nds32_v3_common.h \
+	nds32_v3.h \
+	nds32_v3m.h \
+	nds32_aice.h
 
 ocddatadir = $(pkglibdir)
 nobase_dist_ocddata_DATA =

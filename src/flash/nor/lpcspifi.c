@@ -15,7 +15,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -199,7 +199,7 @@ static int lpcspifi_set_hw_mode(struct flash_bank *bank)
 		return retval;
 	}
 
-	LOG_DEBUG("Writing algorithm to working area at 0x%08x",
+	LOG_DEBUG("Writing algorithm to working area at 0x%08" PRIx32,
 		spifi_init_algorithm->address);
 	/* Write algorithm to working area */
 	retval = target_write_buffer(target,
@@ -715,7 +715,7 @@ static int lpcspifi_write(struct flash_bank *bank, uint8_t *buffer,
 		LOG_WARNING("Working area size is limited; flash writes may be"\
 			" slow. Increase working area size to at least %zdB"\
 			" to reduce write times.",
-			sizeof(lpcspifi_flash_write_code) + page_size
+			(size_t)(sizeof(lpcspifi_flash_write_code) + page_size)
 		);
 	else if (fifo_size > 0x2000) /* Beyond this point, we start to get diminishing returns */
 		fifo_size = 0x2000;
@@ -774,6 +774,7 @@ static int lpcspifi_read_flash_id(struct flash_bank *bank, uint32_t *id)
 	uint32_t ssp_base = lpcspifi_info->ssp_base;
 	uint32_t io_base = lpcspifi_info->io_base;
 	uint32_t value;
+	uint8_t id_buf[3];
 	int retval;
 
 	if (target->state != TARGET_HALTED) {
@@ -808,7 +809,7 @@ static int lpcspifi_read_flash_id(struct flash_bank *bank, uint32_t *id)
 	if (retval == ERROR_OK)
 		retval = ssp_read_reg(target, ssp_base, SSP_DATA, &value);
 	if (retval == ERROR_OK)
-		((uint8_t *)id)[0] = value;
+		id_buf[0] = value;
 
 	/* Dummy write to clock in data */
 	if (retval == ERROR_OK)
@@ -818,7 +819,7 @@ static int lpcspifi_read_flash_id(struct flash_bank *bank, uint32_t *id)
 	if (retval == ERROR_OK)
 		retval = ssp_read_reg(target, ssp_base, SSP_DATA, &value);
 	if (retval == ERROR_OK)
-		((uint8_t *)id)[1] = value;
+		id_buf[1] = value;
 
 	/* Dummy write to clock in data */
 	if (retval == ERROR_OK)
@@ -828,10 +829,12 @@ static int lpcspifi_read_flash_id(struct flash_bank *bank, uint32_t *id)
 	if (retval == ERROR_OK)
 		retval = ssp_read_reg(target, ssp_base, SSP_DATA, &value);
 	if (retval == ERROR_OK)
-		((uint8_t *)id)[2] = value;
+		id_buf[2] = value;
 
 	if (retval == ERROR_OK)
 		retval = ssp_setcs(target, io_base, 1);
+	if (retval == ERROR_OK)
+		*id = id_buf[2] << 16 | id_buf[1] << 8 | id_buf[0];
 
 	return retval;
 }
@@ -913,7 +916,7 @@ static int lpcspifi_probe(struct flash_bank *bank)
 		sectors[sector].offset = sector * lpcspifi_info->dev->sectorsize;
 		sectors[sector].size = lpcspifi_info->dev->sectorsize;
 		sectors[sector].is_erased = -1;
-		sectors[sector].is_protected = 1;
+		sectors[sector].is_protected = 0;
 	}
 
 	bank->sectors = sectors;
@@ -947,7 +950,7 @@ static int get_lpcspifi_info(struct flash_bank *bank, char *buf, int buf_size)
 	}
 
 	snprintf(buf, buf_size, "\nSPIFI flash information:\n"
-		"  Device \'%s\' (ID 0x%08x)\n",
+		"  Device \'%s\' (ID 0x%08" PRIx32 ")\n",
 		lpcspifi_info->dev->name, lpcspifi_info->dev->device_id);
 
 	return ERROR_OK;

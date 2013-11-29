@@ -18,7 +18,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifndef XSCALE_H
@@ -175,5 +175,16 @@ enum {
 };
 
 #define ERROR_XSCALE_NO_TRACE_DATA	(-700)
+
+/* DCSR bit and field definitions */
+#define DCSR_TR	(1 << 16)
+#define DCSR_TU	(1 << 17)
+#define DCSR_TS	(1 << 18)
+#define DCSR_TA	(1 << 19)
+#define DCSR_TD	(1 << 20)
+#define DCSR_TI	(1 << 22)
+#define DCSR_TF	(1 << 23)
+#define DCSR_TRAP_MASK \
+	(DCSR_TF | DCSR_TI | DCSR_TD | DCSR_TA | DCSR_TS | DCSR_TU | DCSR_TR)
 
 #endif /* XSCALE_H */

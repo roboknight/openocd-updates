@@ -21,7 +21,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the
  * Free Software Foundation, Inc.,
- * 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 #ifndef ARM_H
@@ -97,7 +97,7 @@ struct arm {
 	/** Handle to the PC; valid in all core modes. */
 	struct reg *pc;
 
-	/** Handle to the CPSR; valid in all core modes. */
+	/** Handle to the CPSR/xPSR; valid in all core modes. */
 	struct reg *cpsr;
 
 	/** Handle to the SPSR; valid only in core modes with an SPSR. */
@@ -211,7 +211,8 @@ extern const struct command_registration arm_command_handlers[];
 
 int arm_arch_state(struct target *target);
 int arm_get_gdb_reg_list(struct target *target,
-		struct reg **reg_list[], int *reg_list_size);
+		struct reg **reg_list[], int *reg_list_size,
+		enum target_register_class reg_class);
 
 int arm_init_arch_info(struct target *target, struct arm *arm);
 

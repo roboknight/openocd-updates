@@ -14,7 +14,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -50,6 +50,9 @@ extern struct flash_driver dsp5680xx_flash;
 extern struct flash_driver fm3_flash;
 extern struct flash_driver kinetis_flash;
 extern struct flash_driver efm32_flash;
+extern struct flash_driver mdr_flash;
+extern struct flash_driver mini51_flash;
+extern struct flash_driver nuc1x_flash;
 
 /**
  * The list of built-in flash drivers.
@@ -84,6 +87,9 @@ static struct flash_driver *flash_drivers[] = {
 	&dsp5680xx_flash,
 	&kinetis_flash,
 	&efm32_flash,
+	&mdr_flash,
+	&mini51_flash,
+	&nuc1x_flash,
 	NULL,
 };
 

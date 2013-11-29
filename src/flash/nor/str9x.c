@@ -21,7 +21,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -392,9 +392,10 @@ static int str9x_write_block(struct flash_bank *bank,
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	};
 
-	target_write_buffer(target, write_algorithm->address,
-			sizeof(str9x_flash_write_code),
-			(uint8_t *)str9x_flash_write_code);
+	uint8_t code[sizeof(str9x_flash_write_code)];
+	target_buffer_set_u32_array(target, code, ARRAY_SIZE(str9x_flash_write_code),
+			str9x_flash_write_code);
+	target_write_buffer(target, write_algorithm->address, sizeof(code), code);
 
 	/* memory buffer */
 	while (target_alloc_working_area_try(target, buffer_size, &source) != ERROR_OK) {
@@ -606,12 +607,6 @@ COMMAND_HANDLER(str9x_handle_part_id_command)
 }
 #endif
 
-static int get_str9x_info(struct flash_bank *bank, char *buf, int buf_size)
-{
-	snprintf(buf, buf_size, "str9x flash driver info");
-	return ERROR_OK;
-}
-
 COMMAND_HANDLER(str9x_handle_flash_config_command)
 {
 	struct target *target = NULL;
@@ -686,5 +681,4 @@ struct flash_driver str9x_flash = {
 	.auto_probe = str9x_probe,
 	.erase_check = default_flash_blank_check,
 	.protect_check = str9x_protect_check,
-	.info = get_str9x_info,
 };

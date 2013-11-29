@@ -17,7 +17,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifndef MIPS_EJTAG
@@ -110,17 +110,49 @@
 #define EJTAG_DCR_DB			(1 << 17)
 #define EJTAG_DCR_IB			(1 << 16)
 #define EJTAG_DCR_INTE			(1 << 4)
+#define EJTAG_DCR_MP			(1 << 2)
 
 /* breakpoint support */
-#define EJTAG_IBS				0xFF301000
-#define EJTAG_IBA1				0xFF301100
-#define EJTAG_DBS				0xFF302000
-#define EJTAG_DBA1				0xFF302100
+/* EJTAG_V20_* was tested on Broadcom BCM7401
+ * and may or will differ with other hardware. For example EZ4021-FC. */
+#define EJTAG_V20_IBS			0xFF300004
+#define EJTAG_V20_IBA0			0xFF300100
+#define EJTAG_V20_IBC_OFFS		0x4	/* IBC Offset */
+#define EJTAG_V20_IBM_OFFS		0x8
+#define EJTAG_V20_IBAn_STEP		0x10	/* Offset for next channel */
+#define EJTAG_V20_DBS			0xFF30008
+#define EJTAG_V20_DBA0			0xFF300200
+#define EJTAG_V20_DBC_OFFS		0x4
+#define EJTAG_V20_DBM_OFFS		0x8
+#define EJTAG_V20_DBV_OFFS		0xc
+#define EJTAG_V20_DBAn_STEP		0x10
+
+#define EJTAG_V25_IBS			0xFF301000
+#define EJTAG_V25_IBA0			0xFF301100
+#define EJTAG_V25_IBM_OFFS		0x8
+#define EJTAG_V25_IBASID_OFFS		0x10
+#define EJTAG_V25_IBC_OFFS		0x18
+#define EJTAG_V25_IBAn_STEP		0x100
+#define EJTAG_V25_DBS			0xFF302000
+#define EJTAG_V25_DBA0			0xFF302100
+#define EJTAG_V25_DBM_OFFS		0x8
+#define EJTAG_V25_DBASID_OFFS		0x10
+#define EJTAG_V25_DBC_OFFS		0x18
+#define EJTAG_V25_DBV_OFFS		0x20
+#define EJTAG_V25_DBAn_STEP		0x100
+
 #define	EJTAG_DBCn_NOSB			(1 << 13)
 #define	EJTAG_DBCn_NOLB			(1 << 12)
 #define	EJTAG_DBCn_BLM_MASK		0xff
 #define	EJTAG_DBCn_BLM_SHIFT	4
 #define	EJTAG_DBCn_BE			(1 << 0)
+
+#define EJTAG_VERSION_20		0
+#define EJTAG_VERSION_25		1
+#define EJTAG_VERSION_26		2
+#define EJTAG_VERSION_31		3
+#define EJTAG_VERSION_41		4
+#define EJTAG_VERSION_51		5
 
 struct mips_ejtag {
 	struct jtag_tap *tap;
@@ -130,6 +162,28 @@ struct mips_ejtag {
 	int fast_access_save;
 	uint32_t reg8;
 	uint32_t reg9;
+	unsigned scan_delay;
+	int mode;
+	unsigned int ejtag_version;
+
+	/* Memory-Mapped Registers. This addresses are not same on different
+	 * EJTAG versions. */
+	uint32_t ejtag_ibs_addr;	/* Instruction Address Break Status */
+	uint32_t ejtag_iba0_addr;	/* IAB channel 0 */
+	uint32_t ejtag_ibc_offs;	/* IAB Control offset */
+	uint32_t ejtag_ibm_offs;	/* IAB Mask offset */
+	uint32_t ejtag_ibasid_offs;	/* IAB ASID (4Kc) */
+
+	uint32_t ejtag_dbs_addr;	/* Data Address Break Status Register */
+	uint32_t ejtag_dba0_addr;	/* DAB channel 0 */
+	uint32_t ejtag_dbc_offs;	/* DAB Control offset */
+	uint32_t ejtag_dbm_offs;	/* DAB Mask offset */
+	uint32_t ejtag_dbv_offs;	/* DAB Value offset */
+	uint32_t ejtag_dbasid_offs;	/* DAB ASID (4Kc) */
+
+	uint32_t ejtag_iba_step_size;
+	uint32_t ejtag_dba_step_size;	/* siez of step till next
+					 * *DBAn register. */
 };
 
 void mips_ejtag_set_instr(struct mips_ejtag *ejtag_info,
@@ -137,6 +191,8 @@ void mips_ejtag_set_instr(struct mips_ejtag *ejtag_info,
 int mips_ejtag_enter_debug(struct mips_ejtag *ejtag_info);
 int mips_ejtag_exit_debug(struct mips_ejtag *ejtag_info);
 int mips_ejtag_get_idcode(struct mips_ejtag *ejtag_info, uint32_t *idcode);
+void mips_ejtag_add_scan_96(struct mips_ejtag *ejtag_info,
+			    uint32_t ctrl, uint32_t data, uint8_t *in_scan_buf);
 void mips_ejtag_drscan_32_out(struct mips_ejtag *ejtag_info, uint32_t data);
 int mips_ejtag_drscan_32(struct mips_ejtag *ejtag_info, uint32_t *data);
 void mips_ejtag_drscan_8_out(struct mips_ejtag *ejtag_info, uint8_t data);

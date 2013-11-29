@@ -25,7 +25,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -205,7 +205,7 @@ static int Jim_Command_drscan(Jim_Interp *interp, int argc, Jim_Obj *const *args
 
 		Jim_GetLong(interp, args[i], &bits);
 		str = buf_to_str(fields[field_count].in_value, bits, 16);
-		free((void *)fields[field_count].out_value);
+		free(fields[field_count].in_value);
 
 		Jim_ListAppendElement(interp, list, Jim_NewStringObj(interp, str, strlen(str)));
 		free(str);
@@ -467,7 +467,6 @@ static int jim_newtap_ir_param(Jim_Nvp *n, Jim_GetOptInfo *goi,
 	if (e != JIM_OK) {
 		Jim_SetResultFormatted(goi->interp,
 			"option: %s bad parameter", n->name);
-		free((void *)pTap->dotted_name);
 		return e;
 	}
 	switch (n->value) {
@@ -564,7 +563,7 @@ static int jim_newtap_cmd(Jim_GetOptInfo *goi)
 		e = Jim_GetOpt_Nvp(goi, opts, &n);
 		if (e != JIM_OK) {
 			Jim_GetOpt_NvpUnknown(goi, opts, 0);
-			free((void *)pTap->dotted_name);
+			free(cp);
 			free(pTap);
 			return e;
 		}
@@ -579,7 +578,7 @@ static int jim_newtap_cmd(Jim_GetOptInfo *goi)
 		    case NTAP_OPT_EXPECTED_ID:
 			    e = jim_newtap_expected_id(n, goi, pTap);
 			    if (JIM_OK != e) {
-				    free((void *)pTap->dotted_name);
+				    free(cp);
 				    free(pTap);
 				    return e;
 			    }
@@ -589,7 +588,7 @@ static int jim_newtap_cmd(Jim_GetOptInfo *goi)
 		    case NTAP_OPT_IRCAPTURE:
 			    e = jim_newtap_ir_param(n, goi, pTap);
 			    if (JIM_OK != e) {
-				    free((void *)pTap->dotted_name);
+				    free(cp);
 				    free(pTap);
 				    return e;
 			    }
@@ -1121,17 +1120,12 @@ COMMAND_HANDLER(handle_irscan_command)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 	}
 
-	size_t fields_len = sizeof(struct scan_field) * num_fields;
-	fields = malloc(fields_len);
-	memset(fields, 0, fields_len);
+	fields = calloc(num_fields, sizeof(*fields));
 
 	int retval;
 	for (i = 0; i < num_fields; i++) {
 		tap = jtag_tap_by_string(CMD_ARGV[i*2]);
 		if (tap == NULL) {
-			int j;
-			for (j = 0; j < i; j++)
-				free((void *)fields[j].out_value);
 			free(fields);
 			command_print(CMD_CTX, "Tap: %s unknown", CMD_ARGV[i*2]);
 
@@ -1139,14 +1133,14 @@ COMMAND_HANDLER(handle_irscan_command)
 		}
 		int field_size = tap->ir_length;
 		fields[i].num_bits = field_size;
-		fields[i].out_value = malloc(DIV_ROUND_UP(field_size, 8));
+		uint8_t *v = malloc(DIV_ROUND_UP(field_size, 8));
 
-		uint32_t value;
-		retval = parse_u32(CMD_ARGV[i * 2 + 1], &value);
+		uint64_t value;
+		retval = parse_u64(CMD_ARGV[i * 2 + 1], &value);
 		if (ERROR_OK != retval)
 			goto error_return;
-		void *v = (void *)fields[i].out_value;
-		buf_set_u32(v, 0, field_size, value);
+		buf_set_u64(v, 0, field_size, value);
+		fields[i].out_value = v;
 		fields[i].in_value = NULL;
 	}
 

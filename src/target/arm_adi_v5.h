@@ -18,7 +18,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifndef ARM_ADI_V5_H
@@ -60,8 +60,8 @@
 #define DP_SELECT		0x8		/* JTAG: r/w; SWD: write */
 #define DP_RDBUFF		0xC		/* read-only */
 
-#define WCR_TO_TRN(wcr) (1 + (3 & ((wcr)) >> 8))	/* 1..4 clocks */
-#define WCR_TO_PRESCALE(wcr) (7 & ((wcr)))		/* impl defined */
+#define WCR_TO_TRN(wcr) ((uint32_t)(1 + (3 & ((wcr)) >> 8)))	/* 1..4 clocks */
+#define WCR_TO_PRESCALE(wcr) ((uint32_t)(7 & ((wcr))))		/* impl defined */
 
 /* Fields of the DP's AP ABORT register */
 #define DAPABORT		(1 << 0)
@@ -186,6 +186,9 @@ struct adiv5_dap {
 
 	/* Size of TAR autoincrement block, ARM ADI Specification requires at least 10 bits */
 	uint32_t tar_autoincr_block;
+
+	/* true if packed transfers are supported by the MEM-AP */
+	bool packed_transfers;
 };
 
 /**
@@ -407,6 +410,8 @@ int mem_ap_read_buf_u16(struct adiv5_dap *swjdp,
 		uint8_t *buffer, int count, uint32_t address);
 int mem_ap_read_buf_u32(struct adiv5_dap *swjdp,
 		uint8_t *buffer, int count, uint32_t address, bool addr_incr);
+int mem_ap_read(struct adiv5_dap *dap, uint8_t *buffer, uint32_t size,
+		uint32_t count, uint32_t address, bool addrinc);
 
 int mem_ap_write_buf_u8(struct adiv5_dap *swjdp,
 		const uint8_t *buffer, int count, uint32_t address);
@@ -414,6 +419,9 @@ int mem_ap_write_buf_u16(struct adiv5_dap *swjdp,
 		const uint8_t *buffer, int count, uint32_t address);
 int mem_ap_write_buf_u32(struct adiv5_dap *swjdp,
 		const uint8_t *buffer, int count, uint32_t address, bool addr_incr);
+int mem_ap_write(struct adiv5_dap *dap, const uint8_t *buffer, uint32_t size,
+		uint32_t count, uint32_t address, bool addrinc);
+
 
 /* Queued MEM-AP memory mapped single word transfers with selection of ap */
 int mem_ap_sel_read_u32(struct adiv5_dap *swjdp, uint8_t ap,

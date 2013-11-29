@@ -33,7 +33,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  *                                                                         *
  *   Cortex-A8(tm) TRM, ARM DDI 0344H                                      *
  *   Cortex-A9(tm) TRM, ARM DDI 0407F                                      *
@@ -102,14 +102,14 @@ static int cortex_a8_check_address(struct target *target, uint32_t address)
 	uint32_t os_border = armv7a->armv7a_mmu.os_border;
 	if ((address < os_border) &&
 		(armv7a->arm.core_mode == ARM_MODE_SVC)) {
-		LOG_ERROR("%x access in userspace and target in supervisor", address);
+		LOG_ERROR("%" PRIx32 " access in userspace and target in supervisor", address);
 		return ERROR_FAIL;
 	}
 	if ((address >= os_border) &&
 		(cortex_a8->curr_mode != ARM_MODE_SVC)) {
 		dpm_modeswitch(&armv7a->dpm, ARM_MODE_SVC);
 		cortex_a8->curr_mode = ARM_MODE_SVC;
-		LOG_INFO("%x access in kernel space and target not in supervisor",
+		LOG_INFO("%" PRIx32 " access in kernel space and target not in supervisor",
 			address);
 		return ERROR_OK;
 	}
@@ -1911,7 +1911,7 @@ static int cortex_a8_write_apb_ab_memory(struct target *target,
 		goto error_free_buff_w;
 	if (dscr & (DSCR_STICKY_ABORT_PRECISE | DSCR_STICKY_ABORT_IMPRECISE)) {
 		/* Abort occurred - clear it and exit */
-		LOG_ERROR("abort occurred - dscr = 0x%08x", dscr);
+		LOG_ERROR("abort occurred - dscr = 0x%08" PRIx32, dscr);
 		mem_ap_sel_write_atomic_u32(swjdp, armv7a->debug_ap,
 					armv7a->debug_base + CPUDBG_DRCR, 1<<2);
 		goto error_free_buff_w;
@@ -1949,7 +1949,7 @@ static int cortex_a8_read_apb_ab_memory(struct target *target,
 	int start_byte = address & 0x3;
 	struct reg *reg;
 	uint32_t dscr;
-	char *tmp_buff = NULL;
+	uint32_t *tmp_buff;
 	uint32_t buff32[2];
 	if (target->state != TARGET_HALTED) {
 		LOG_WARNING("target not halted");
@@ -1957,6 +1957,14 @@ static int cortex_a8_read_apb_ab_memory(struct target *target,
 	}
 
 	total_u32 = DIV_ROUND_UP((address & 3) + total_bytes, 4);
+
+	/* Due to offset word alignment, the  buffer may not have space
+	 * to read the full first and last int32 words,
+	 * hence, malloc space to read into, then copy and align into the buffer.
+	 */
+	tmp_buff = malloc(total_u32 * 4);
+	if (tmp_buff == NULL)
+		return ERROR_FAIL;
 
 	/* Mark register R0 as dirty, as it will be used
 	 * for transferring the data.
@@ -1970,7 +1978,7 @@ static int cortex_a8_read_apb_ab_memory(struct target *target,
 	retval =
 		mem_ap_sel_write_atomic_u32(swjdp, armv7a->debug_ap, armv7a->debug_base + CPUDBG_DRCR, 1<<2);
 	if (retval != ERROR_OK)
-		return retval;
+		goto error_free_buff_r;
 
 	/* Read DSCR */
 	retval = mem_ap_sel_read_atomic_u32(swjdp, armv7a->debug_ap,
@@ -2009,12 +2017,6 @@ static int cortex_a8_read_apb_ab_memory(struct target *target,
 		goto error_unset_dtr_r;
 
 
-	/* Due to offset word alignment, the  buffer may not have space
-	 * to read the full first and last int32 words,
-	 * hence, malloc space to read into, then copy and align into the buffer.
-	 */
-	tmp_buff = (char *) malloc(total_u32<<2);
-
 	/* The last word needs to be handled separately - read all other words in one go.
 	 */
 	if (total_u32 > 1) {
@@ -2023,7 +2025,7 @@ static int cortex_a8_read_apb_ab_memory(struct target *target,
 		 *
 		 * This data is read in aligned to 32 bit boundary, hence may need shifting later.
 		 */
-		retval = mem_ap_sel_read_buf_u32_noincr(swjdp, armv7a->debug_ap, (uint8_t *)tmp_buff, (total_u32-1)<<2,
+		retval = mem_ap_sel_read_buf_u32_noincr(swjdp, armv7a->debug_ap, (uint8_t *)tmp_buff, (total_u32-1) * 4,
 									armv7a->debug_base + CPUDBG_DTRTX);
 		if (retval != ERROR_OK)
 			goto error_unset_dtr_r;
@@ -2052,7 +2054,7 @@ static int cortex_a8_read_apb_ab_memory(struct target *target,
 		goto error_free_buff_r;
 	if (dscr & (DSCR_STICKY_ABORT_PRECISE | DSCR_STICKY_ABORT_IMPRECISE)) {
 		/* Abort occurred - clear it and exit */
-		LOG_ERROR("abort occurred - dscr = 0x%08x", dscr);
+		LOG_ERROR("abort occurred - dscr = 0x%08" PRIx32, dscr);
 		mem_ap_sel_write_atomic_u32(swjdp, armv7a->debug_ap,
 					armv7a->debug_base + CPUDBG_DRCR, 1<<2);
 		goto error_free_buff_r;
@@ -2060,12 +2062,12 @@ static int cortex_a8_read_apb_ab_memory(struct target *target,
 
 	/* Read the last word */
 	retval = mem_ap_sel_read_atomic_u32(swjdp, armv7a->debug_ap,
-				armv7a->debug_base + CPUDBG_DTRTX, (uint32_t *)&tmp_buff[(total_u32-1)<<2]);
+				armv7a->debug_base + CPUDBG_DTRTX, &tmp_buff[total_u32 - 1]);
 	if (retval != ERROR_OK)
 		goto error_free_buff_r;
 
 	/* Copy and align the data into the output buffer */
-	memcpy(buffer, &tmp_buff[start_byte], total_bytes);
+	memcpy(buffer, (uint8_t *)tmp_buff + start_byte, total_bytes);
 
 	free(tmp_buff);
 
@@ -2102,7 +2104,7 @@ static int cortex_a8_read_phys_memory(struct target *target,
 	struct adiv5_dap *swjdp = armv7a->arm.dap;
 	int retval = ERROR_COMMAND_SYNTAX_ERROR;
 	uint8_t apsel = swjdp->apsel;
-	LOG_DEBUG("Reading memory at real address 0x%x; size %d; count %d",
+	LOG_DEBUG("Reading memory at real address 0x%" PRIx32 "; size %" PRId32 "; count %" PRId32,
 		address, size, count);
 
 	if (count && buffer) {
@@ -2151,7 +2153,7 @@ static int cortex_a8_read_memory(struct target *target, uint32_t address,
 	uint8_t apsel = swjdp->apsel;
 
 	/* cortex_a8 handles unaligned memory access */
-	LOG_DEBUG("Reading memory at address 0x%x; size %d; count %d", address,
+	LOG_DEBUG("Reading memory at address 0x%" PRIx32 "; size %" PRId32 "; count %" PRId32, address,
 		size, count);
 	if (armv7a->memory_ap_available && (apsel == armv7a->memory_ap)) {
 		if (!armv7a->is_armv7r) {
@@ -2166,7 +2168,7 @@ static int cortex_a8_read_memory(struct target *target, uint32_t address,
 				if (retval != ERROR_OK)
 					return retval;
 
-				LOG_DEBUG("Reading at virtual address. Translating v:0x%x to r:0x%x",
+				LOG_DEBUG("Reading at virtual address. Translating v:0x%" PRIx32 " to r:0x%" PRIx32,
 					virt, phys);
 				address = phys;
 			}
@@ -2196,7 +2198,7 @@ static int cortex_a8_write_phys_memory(struct target *target,
 	int retval = ERROR_COMMAND_SYNTAX_ERROR;
 	uint8_t apsel = swjdp->apsel;
 
-	LOG_DEBUG("Writing memory to real address 0x%x; size %d; count %d", address,
+	LOG_DEBUG("Writing memory to real address 0x%" PRIx32 "; size %" PRId32 "; count %" PRId32, address,
 		size, count);
 
 	if (count && buffer) {
@@ -2300,11 +2302,11 @@ static int cortex_a8_write_memory(struct target *target, uint32_t address,
 	struct adiv5_dap *swjdp = armv7a->arm.dap;
 	uint8_t apsel = swjdp->apsel;
 	/* cortex_a8 handles unaligned memory access */
-	LOG_DEBUG("Writing memory at address 0x%x; size %d; count %d", address,
+	LOG_DEBUG("Writing memory at address 0x%" PRIx32 "; size %" PRId32 "; count %" PRId32, address,
 		size, count);
 	if (armv7a->memory_ap_available && (apsel == armv7a->memory_ap)) {
 
-		LOG_DEBUG("Writing memory to address 0x%x; size %d; count %d", address, size,
+		LOG_DEBUG("Writing memory to address 0x%" PRIx32 "; size %" PRId32 "; count %" PRId32, address, size,
 			count);
 		if (!armv7a->is_armv7r) {
 			retval = cortex_a8_mmu(target, &enabled);
@@ -2316,7 +2318,7 @@ static int cortex_a8_write_memory(struct target *target, uint32_t address,
 				retval = cortex_a8_virt2phys(target, virt, &phys);
 				if (retval != ERROR_OK)
 					return retval;
-				LOG_DEBUG("Writing to virtual address. Translating v:0x%x to r:0x%x",
+				LOG_DEBUG("Writing to virtual address. Translating v:0x%" PRIx32 " to r:0x%" PRIx32,
 					virt,
 					phys);
 				address = phys;
@@ -2694,7 +2696,7 @@ COMMAND_HANDLER(cortex_a8_handle_smp_gdb_command)
 			target->gdb_service->core[1] = coreid;
 
 		}
-		command_print(CMD_CTX, "gdb coreid  %d -> %d", target->gdb_service->core[0]
+		command_print(CMD_CTX, "gdb coreid  %" PRId32 " -> %" PRId32, target->gdb_service->core[0]
 			, target->gdb_service->core[1]);
 	}
 	return ERROR_OK;
@@ -2746,9 +2748,9 @@ static const struct command_registration cortex_a8_command_handlers[] = {
 		.chain = armv7a_command_handlers,
 	},
 	{
-		.name = "cortex_a8",
+		.name = "cortex_a",
 		.mode = COMMAND_ANY,
-		.help = "Cortex-A8 command group",
+		.help = "Cortex-A command group",
 		.usage = "",
 		.chain = cortex_a8_exec_command_handlers,
 	},
@@ -2756,12 +2758,11 @@ static const struct command_registration cortex_a8_command_handlers[] = {
 };
 
 struct target_type cortexa8_target = {
-	.name = "cortex_a8",
+	.name = "cortex_a",
+	.deprecated_name = "cortex_a8",
 
 	.poll = cortex_a8_poll,
 	.arch_state = armv7a_arch_state,
-
-	.target_request_data = NULL,
 
 	.halt = cortex_a8_halt,
 	.resume = cortex_a8_resume,
@@ -2769,7 +2770,6 @@ struct target_type cortexa8_target = {
 
 	.assert_reset = cortex_a8_assert_reset,
 	.deassert_reset = cortex_a8_deassert_reset,
-	.soft_reset_halt = NULL,
 
 	/* REVISIT allow exporting VFP3 registers ... */
 	.get_gdb_reg_list = arm_get_gdb_reg_list,
@@ -2841,15 +2841,12 @@ struct target_type cortexr4_target = {
 	.poll = cortex_a8_poll,
 	.arch_state = armv7a_arch_state,
 
-	.target_request_data = NULL,
-
 	.halt = cortex_a8_halt,
 	.resume = cortex_a8_resume,
 	.step = cortex_a8_step,
 
 	.assert_reset = cortex_a8_assert_reset,
 	.deassert_reset = cortex_a8_deassert_reset,
-	.soft_reset_halt = NULL,
 
 	/* REVISIT allow exporting VFP3 registers ... */
 	.get_gdb_reg_list = arm_get_gdb_reg_list,

@@ -23,7 +23,7 @@
  *   You should have received a copy of the GNU General Public License
  *   along with this program; if not, write to the
  *   Free Software Foundation, Inc.,
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  ***************************************************************************/
 
 /**
@@ -356,7 +356,7 @@ static int jtag_idcode_q_read(struct adiv5_dap *dap,
 
 	fields[0].num_bits = 32;
 	fields[0].out_value = NULL;
-	fields[0].in_value = (void *) data;
+	fields[0].in_value = (uint8_t *) data;
 
 	jtag_add_dr_scan(jtag_info->tap, 1, fields, TAP_IDLE);
 

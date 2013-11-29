@@ -16,7 +16,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -1697,13 +1697,11 @@ struct target_type arm920t_target = {
 	.get_gdb_reg_list = arm_get_gdb_reg_list,
 
 	.read_memory = arm920t_read_memory,
-	.write_memory = arm920t_write_memory,
+	.write_memory = arm7_9_write_memory_opt,
 	.read_phys_memory = arm920t_read_phys_memory,
 	.write_phys_memory = arm920t_write_phys_memory,
 	.mmu = arm920_mmu,
 	.virt2phys = arm920_virt2phys,
-
-	.bulk_write_memory = arm7_9_bulk_write_memory,
 
 	.checksum_memory = arm_checksum_memory,
 	.blank_check_memory = arm_blank_check_memory,

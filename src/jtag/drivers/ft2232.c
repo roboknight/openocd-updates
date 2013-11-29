@@ -24,7 +24,7 @@
 *   You should have received a copy of the GNU General Public License     *
 *   along with this program; if not, write to the                         *
 *   Free Software Foundation, Inc.,                                       *
-*   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+*   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
 ***************************************************************************/
 
 /**
@@ -3141,9 +3141,8 @@ static void flossjtag_blink(void)
 static int ft2232_quit(void)
 {
 #if BUILD_FT2232_FTD2XX == 1
-	FT_STATUS status;
 
-	status = FT_Close(ftdih);
+	FT_Close(ftdih);
 #elif BUILD_FT2232_LIBFTDI == 1
 	ftdi_usb_close(&ftdic);
 

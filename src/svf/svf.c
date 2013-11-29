@@ -15,7 +15,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 /* The specification for SVF is available here:
@@ -642,8 +642,9 @@ static int svf_read_command_from_file(FILE *fd)
 				 *  - added space.
 				 *  - terminating NUL ('\0')
 				 */
-				if ((cmd_pos + 2) >= svf_command_buffer_size) {
-					svf_command_buffer = realloc(svf_command_buffer, (cmd_pos + 2));
+				if (cmd_pos + 3 > svf_command_buffer_size) {
+					svf_command_buffer = realloc(svf_command_buffer, cmd_pos + 3);
+					svf_command_buffer_size = cmd_pos + 3;
 					if (svf_command_buffer == NULL) {
 						LOG_ERROR("not enough memory");
 						return ERROR_FAIL;

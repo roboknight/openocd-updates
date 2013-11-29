@@ -23,7 +23,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -173,7 +173,8 @@ static int mips32_write_core_reg(struct target *target, int num)
 	return ERROR_OK;
 }
 
-int mips32_get_gdb_reg_list(struct target *target, struct reg **reg_list[], int *reg_list_size)
+int mips32_get_gdb_reg_list(struct target *target, struct reg **reg_list[],
+		int *reg_list_size, enum target_register_class reg_class)
 {
 	/* get pointers to arch-specific information */
 	struct mips32_common *mips32 = target_to_mips32(target);
@@ -299,6 +300,9 @@ int mips32_init_arch_info(struct target *target, struct mips32_common *mips32, s
 	mips32->ejtag_info.tap = tap;
 	mips32->read_core_reg = mips32_read_core_reg;
 	mips32->write_core_reg = mips32_write_core_reg;
+
+	mips32->ejtag_info.scan_delay = 2000000;	/* Initial default value */
+	mips32->ejtag_info.mode = 0;			/* Initial default value */
 
 	return ERROR_OK;
 }
@@ -466,13 +470,67 @@ int mips32_examine(struct target *target)
 	return ERROR_OK;
 }
 
+static int mips32_configure_ibs(struct target *target)
+{
+	struct mips32_common *mips32 = target_to_mips32(target);
+	struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
+	int retval, i;
+	uint32_t bpinfo;
+
+	/* get number of inst breakpoints */
+	retval = target_read_u32(target, ejtag_info->ejtag_ibs_addr, &bpinfo);
+	if (retval != ERROR_OK)
+		return retval;
+
+	mips32->num_inst_bpoints = (bpinfo >> 24) & 0x0F;
+	mips32->num_inst_bpoints_avail = mips32->num_inst_bpoints;
+	mips32->inst_break_list = calloc(mips32->num_inst_bpoints,
+		sizeof(struct mips32_comparator));
+
+	for (i = 0; i < mips32->num_inst_bpoints; i++)
+		mips32->inst_break_list[i].reg_address =
+			ejtag_info->ejtag_iba0_addr +
+			(ejtag_info->ejtag_iba_step_size * i);
+
+	/* clear IBIS reg */
+	retval = target_write_u32(target, ejtag_info->ejtag_ibs_addr, 0);
+	return retval;
+}
+
+static int mips32_configure_dbs(struct target *target)
+{
+	struct mips32_common *mips32 = target_to_mips32(target);
+	struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
+	int retval, i;
+	uint32_t bpinfo;
+
+	/* get number of data breakpoints */
+	retval = target_read_u32(target, ejtag_info->ejtag_dbs_addr, &bpinfo);
+	if (retval != ERROR_OK)
+		return retval;
+
+	mips32->num_data_bpoints = (bpinfo >> 24) & 0x0F;
+	mips32->num_data_bpoints_avail = mips32->num_data_bpoints;
+	mips32->data_break_list = calloc(mips32->num_data_bpoints,
+		sizeof(struct mips32_comparator));
+
+	for (i = 0; i < mips32->num_data_bpoints; i++)
+		mips32->data_break_list[i].reg_address =
+			ejtag_info->ejtag_dba0_addr +
+			(ejtag_info->ejtag_dba_step_size * i);
+
+	/* clear DBIS reg */
+	retval = target_write_u32(target, ejtag_info->ejtag_dbs_addr, 0);
+	return retval;
+}
+
 int mips32_configure_break_unit(struct target *target)
 {
 	/* get pointers to arch-specific information */
 	struct mips32_common *mips32 = target_to_mips32(target);
+	struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
 	int retval;
-	uint32_t dcr, bpinfo;
-	int i;
+	uint32_t dcr;
 
 	if (mips32->bp_scanned)
 		return ERROR_OK;
@@ -482,38 +540,19 @@ int mips32_configure_break_unit(struct target *target)
 	if (retval != ERROR_OK)
 		return retval;
 
+	/* EJTAG 2.0 does not specify EJTAG_DCR_IB and EJTAG_DCR_DB bits,
+	 * assume IB and DB registers are always present. */
+	if (ejtag_info->ejtag_version == EJTAG_VERSION_20)
+		dcr |= EJTAG_DCR_IB | EJTAG_DCR_DB;
+
 	if (dcr & EJTAG_DCR_IB) {
-		/* get number of inst breakpoints */
-		retval = target_read_u32(target, EJTAG_IBS, &bpinfo);
-		if (retval != ERROR_OK)
-			return retval;
-
-		mips32->num_inst_bpoints = (bpinfo >> 24) & 0x0F;
-		mips32->num_inst_bpoints_avail = mips32->num_inst_bpoints;
-		mips32->inst_break_list = calloc(mips32->num_inst_bpoints, sizeof(struct mips32_comparator));
-		for (i = 0; i < mips32->num_inst_bpoints; i++)
-			mips32->inst_break_list[i].reg_address = EJTAG_IBA1 + (0x100 * i);
-
-		/* clear IBIS reg */
-		retval = target_write_u32(target, EJTAG_IBS, 0);
+		retval = mips32_configure_ibs(target);
 		if (retval != ERROR_OK)
 			return retval;
 	}
 
 	if (dcr & EJTAG_DCR_DB) {
-		/* get number of data breakpoints */
-		retval = target_read_u32(target, EJTAG_DBS, &bpinfo);
-		if (retval != ERROR_OK)
-			return retval;
-
-		mips32->num_data_bpoints = (bpinfo >> 24) & 0x0F;
-		mips32->num_data_bpoints_avail = mips32->num_data_bpoints;
-		mips32->data_break_list = calloc(mips32->num_data_bpoints, sizeof(struct mips32_comparator));
-		for (i = 0; i < mips32->num_data_bpoints; i++)
-			mips32->data_break_list[i].reg_address = EJTAG_DBA1 + (0x100 * i);
-
-		/* clear DBIS reg */
-		retval = target_write_u32(target, EJTAG_DBS, 0);
+		retval = mips32_configure_dbs(target);
 		if (retval != ERROR_OK)
 			return retval;
 	}
@@ -779,6 +818,29 @@ COMMAND_HANDLER(mips32_handle_cp0_command)
 	return ERROR_OK;
 }
 
+COMMAND_HANDLER(mips32_handle_scan_delay_command)
+{
+	struct target *target = get_current_target(CMD_CTX);
+	struct mips32_common *mips32 = target_to_mips32(target);
+	struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
+
+	if (CMD_ARGC == 1)
+		COMMAND_PARSE_NUMBER(uint, CMD_ARGV[0], ejtag_info->scan_delay);
+	else if (CMD_ARGC > 1)
+			return ERROR_COMMAND_SYNTAX_ERROR;
+
+	command_print(CMD_CTX, "scan delay: %d nsec", ejtag_info->scan_delay);
+	if (ejtag_info->scan_delay >= 2000000) {
+		ejtag_info->mode = 0;
+		command_print(CMD_CTX, "running in legacy mode");
+	} else {
+		ejtag_info->mode = 1;
+		command_print(CMD_CTX, "running in fast queued mode");
+	}
+
+	return ERROR_OK;
+}
+
 static const struct command_registration mips32_exec_command_handlers[] = {
 	{
 		.name = "cp0",
@@ -786,6 +848,13 @@ static const struct command_registration mips32_exec_command_handlers[] = {
 		.mode = COMMAND_EXEC,
 		.usage = "regnum select [value]",
 		.help = "display/modify cp0 register",
+	},
+		{
+		.name = "scan_delay",
+		.handler = mips32_handle_scan_delay_command,
+		.mode = COMMAND_ANY,
+		.help = "display/set scan delay in nano seconds",
+		.usage = "[value]",
 	},
 	COMMAND_REGISTRATION_DONE
 };

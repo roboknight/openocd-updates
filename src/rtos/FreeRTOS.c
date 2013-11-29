@@ -15,7 +15,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -50,7 +50,7 @@ struct FreeRTOS_params {
 
 const struct FreeRTOS_params FreeRTOS_params_list[] = {
 	{
-	"cortex_m3",			/* target_name */
+	"cortex_m",			/* target_name */
 	4,						/* thread_count_width; */
 	4,						/* pointer_width; */
 	16,						/* list_next_offset; */
@@ -72,7 +72,19 @@ const struct FreeRTOS_params FreeRTOS_params_list[] = {
 	0,						/* thread_stack_offset; */
 	52,						/* thread_name_offset; */
 	&rtos_standard_Cortex_M3_stacking,	/* stacking_info */
-	}
+	},
+	{
+	"nds32_v3",			/* target_name */
+	4,						/* thread_count_width; */
+	4,						/* pointer_width; */
+	16,						/* list_next_offset; */
+	20,						/* list_width; */
+	8,						/* list_elem_next_offset; */
+	12,						/* list_elem_content_offset */
+	0,						/* thread_stack_offset; */
+	52,						/* thread_name_offset; */
+	&rtos_standard_NDS32_N1068_stacking,	/* stacking_info */
+	},
 };
 
 #define FREERTOS_NUM_PARAMS ((int)(sizeof(FreeRTOS_params_list)/sizeof(struct FreeRTOS_params)))

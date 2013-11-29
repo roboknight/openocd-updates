@@ -21,7 +21,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -149,6 +149,9 @@ FLASH_BANK_COMMAND_HANDLER(stm32x_flash_bank_command)
 	stm32x_info->has_dual_banks = false;
 	stm32x_info->register_base = FLASH_REG_BASE_B0;
 	stm32x_info->user_bank_size = bank->size;
+
+	/* the stm32l erased value is 0x00 */
+	bank->default_padded_value = 0x00;
 
 	return ERROR_OK;
 }
@@ -363,11 +366,6 @@ static int stm32x_protect_check(struct flash_bank *bank)
 	int i, s;
 	int num_bits;
 	int set;
-
-	if (target->state != TARGET_HALTED) {
-		LOG_ERROR("Target not halted");
-		return ERROR_TARGET_NOT_HALTED;
-	}
 
 	int retval = stm32x_check_operation_supported(bank);
 	if (ERROR_OK != retval)
@@ -628,7 +626,7 @@ static int stm32x_write_block(struct flash_bank *bank, uint8_t *buffer,
 	};
 
 	retval = target_write_buffer(target, write_algorithm->address,
-			sizeof(stm32x_flash_write_code), (uint8_t *)stm32x_flash_write_code);
+			sizeof(stm32x_flash_write_code), stm32x_flash_write_code);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -927,6 +925,7 @@ static int stm32x_probe(struct flash_bank *bank)
 		stm32x_info->default_rdp = 0x55AA;
 		break;
 	case 0x440: /* stm32f0x */
+	case 0x444:
 		page_size = 1024;
 		stm32x_info->ppage_size = 4;
 		max_flash_size_in_kb = 64;
@@ -1020,202 +1019,181 @@ COMMAND_HANDLER(stm32x_handle_part_id_command)
 
 static int get_stm32x_info(struct flash_bank *bank, char *buf, int buf_size)
 {
-	uint32_t device_id;
-	int printed;
+	uint32_t dbgmcu_idcode;
 
 		/* read stm32 device id register */
-	int retval = stm32x_get_device_id(bank, &device_id);
+	int retval = stm32x_get_device_id(bank, &dbgmcu_idcode);
 	if (retval != ERROR_OK)
 		return retval;
 
-	if ((device_id & 0xfff) == 0x410) {
-		printed = snprintf(buf, buf_size, "stm32x (Medium Density) - Rev: ");
-		buf += printed;
-		buf_size -= printed;
+	uint16_t device_id = dbgmcu_idcode & 0xfff;
+	uint16_t rev_id = dbgmcu_idcode >> 16;
+	const char *device_str;
+	const char *rev_str = NULL;
 
-		switch (device_id >> 16) {
-			case 0x0000:
-				snprintf(buf, buf_size, "A");
-				break;
+	switch (device_id) {
+	case 0x410:
+		device_str = "STM32F10x (Medium Density)";
 
-			case 0x2000:
-				snprintf(buf, buf_size, "B");
-				break;
+		switch (rev_id) {
+		case 0x0000:
+			rev_str = "A";
+			break;
 
-			case 0x2001:
-				snprintf(buf, buf_size, "Z");
-				break;
+		case 0x2000:
+			rev_str = "B";
+			break;
 
-			case 0x2003:
-				snprintf(buf, buf_size, "Y");
-				break;
+		case 0x2001:
+			rev_str = "Z";
+			break;
 
-			default:
-				snprintf(buf, buf_size, "unknown");
-				break;
+		case 0x2003:
+			rev_str = "Y";
+			break;
 		}
-	} else if ((device_id & 0xfff) == 0x412) {
-		printed = snprintf(buf, buf_size, "stm32x (Low Density) - Rev: ");
-		buf += printed;
-		buf_size -= printed;
+		break;
 
-		switch (device_id >> 16) {
-			case 0x1000:
-				snprintf(buf, buf_size, "A");
-				break;
+	case 0x412:
+		device_str = "STM32F10x (Low Density)";
 
-			default:
-				snprintf(buf, buf_size, "unknown");
-				break;
+		switch (rev_id) {
+		case 0x1000:
+			rev_str = "A";
+			break;
 		}
-	} else if ((device_id & 0xfff) == 0x414) {
-		printed = snprintf(buf, buf_size, "stm32x (High Density) - Rev: ");
-		buf += printed;
-		buf_size -= printed;
+		break;
 
-		switch (device_id >> 16) {
-			case 0x1000:
-				snprintf(buf, buf_size, "A");
-				break;
+	case 0x414:
+		device_str = "STM32F10x (High Density)";
 
-			case 0x1001:
-				snprintf(buf, buf_size, "Z");
-				break;
+		switch (rev_id) {
+		case 0x1000:
+			rev_str = "A";
+			break;
 
-			default:
-				snprintf(buf, buf_size, "unknown");
-				break;
+		case 0x1001:
+			rev_str = "Z";
+			break;
+
+		case 0x1003:
+			rev_str = "Y";
+			break;
 		}
-	} else if ((device_id & 0xfff) == 0x418) {
-		printed = snprintf(buf, buf_size, "stm32x (Connectivity) - Rev: ");
-		buf += printed;
-		buf_size -= printed;
+		break;
 
-		switch (device_id >> 16) {
-			case 0x1000:
-				snprintf(buf, buf_size, "A");
-				break;
+	case 0x418:
+		device_str = "STM32F10x (Connectivity)";
 
-			case 0x1001:
-				snprintf(buf, buf_size, "Z");
-				break;
+		switch (rev_id) {
+		case 0x1000:
+			rev_str = "A";
+			break;
 
-			default:
-				snprintf(buf, buf_size, "unknown");
-				break;
+		case 0x1001:
+			rev_str = "Z";
+			break;
 		}
-	} else if ((device_id & 0xfff) == 0x420) {
-		printed = snprintf(buf, buf_size, "stm32x (Value) - Rev: ");
-		buf += printed;
-		buf_size -= printed;
+		break;
 
-		switch (device_id >> 16) {
-			case 0x1000:
-				snprintf(buf, buf_size, "A");
-				break;
+	case 0x420:
+		device_str = "STM32F100 (Low/Medium Density)";
 
-			case 0x1001:
-				snprintf(buf, buf_size, "Z");
-				break;
+		switch (rev_id) {
+		case 0x1000:
+			rev_str = "A";
+			break;
 
-			default:
-				snprintf(buf, buf_size, "unknown");
-				break;
+		case 0x1001:
+			rev_str = "Z";
+			break;
 		}
-	} else if ((device_id & 0xfff) == 0x422) {
-		printed = snprintf(buf, buf_size, "stm32f30x - Rev: ");
-		buf += printed;
-		buf_size -= printed;
+		break;
 
-		switch (device_id >> 16) {
-			case 0x1000:
-				snprintf(buf, buf_size, "A");
-				break;
+	case 0x422:
+		device_str = "STM32F30x";
 
-			case 0x1001:
-				snprintf(buf, buf_size, "Z");
-				break;
+		switch (rev_id) {
+		case 0x1000:
+			rev_str = "A";
+			break;
 
-			case 0x2000:
-				snprintf(buf, buf_size, "B");
-				break;
+		case 0x1001:
+			rev_str = "Z";
+			break;
 
-			default:
-				snprintf(buf, buf_size, "unknown");
-				break;
+		case 0x1003:
+			rev_str = "Y";
+			break;
+
+		case 0x2000:
+			rev_str = "B";
+			break;
 		}
-	} else if ((device_id & 0xfff) == 0x428) {
-		printed = snprintf(buf, buf_size, "stm32x (Value HD) - Rev: ");
-		buf += printed;
-		buf_size -= printed;
+		break;
 
-		switch (device_id >> 16) {
-			case 0x1000:
-				snprintf(buf, buf_size, "A");
-				break;
+	case 0x428:
+		device_str = "STM32F100 (High Density)";
 
-			case 0x1001:
-				snprintf(buf, buf_size, "Z");
-				break;
+		switch (rev_id) {
+		case 0x1000:
+			rev_str = "A";
+			break;
 
-			default:
-				snprintf(buf, buf_size, "unknown");
-				break;
+		case 0x1001:
+			rev_str = "Z";
+			break;
 		}
-	} else if ((device_id & 0xfff) == 0x430) {
-		printed = snprintf(buf, buf_size, "stm32x (XL) - Rev: ");
-		buf += printed;
-		buf_size -= printed;
+		break;
 
-		switch (device_id >> 16) {
-			case 0x1000:
-				snprintf(buf, buf_size, "A");
-				break;
+	case 0x430:
+		device_str = "STM32F10x (XL Density)";
 
-			default:
-				snprintf(buf, buf_size, "unknown");
-				break;
+		switch (rev_id) {
+		case 0x1000:
+			rev_str = "A";
+			break;
 		}
-	} else if ((device_id & 0xfff) == 0x432) {
-		printed = snprintf(buf, buf_size, "stm32f37x - Rev: ");
-		buf += printed;
-		buf_size -= printed;
+		break;
 
-		switch (device_id >> 16) {
-			case 0x1000:
-				snprintf(buf, buf_size, "A");
-				break;
+	case 0x432:
+		device_str = "STM32F37x";
 
-			case 0x2000:
-				snprintf(buf, buf_size, "B");
-				break;
+		switch (rev_id) {
+		case 0x1000:
+			rev_str = "A";
+			break;
 
-			default:
-				snprintf(buf, buf_size, "unknown");
-				break;
+		case 0x2000:
+			rev_str = "B";
+			break;
 		}
-	} else if ((device_id & 0xfff) == 0x440) {
-		printed = snprintf(buf, buf_size, "stm32f0x - Rev: ");
-		buf += printed;
-		buf_size -= printed;
+		break;
 
-		switch (device_id >> 16) {
-			case 0x1000:
-				snprintf(buf, buf_size, "1.0");
-				break;
+	case 0x440:
+	case 0x444:
+		device_str = "STM32F0xx";
 
-			case 0x2000:
-				snprintf(buf, buf_size, "2.0");
-				break;
+		switch (rev_id) {
+		case 0x1000:
+			rev_str = "1.0";
+			break;
 
-			default:
-				snprintf(buf, buf_size, "unknown");
-				break;
+		case 0x2000:
+			rev_str = "2.0";
+			break;
 		}
-	} else {
-		snprintf(buf, buf_size, "Cannot identify target as a stm32x\n");
+		break;
+
+	default:
+		snprintf(buf, buf_size, "Cannot identify target as a STM32F0/1/3\n");
 		return ERROR_FAIL;
 	}
+
+	if (rev_str != NULL)
+		snprintf(buf, buf_size, "%s - Rev: %s", device_str, rev_str);
+	else
+		snprintf(buf, buf_size, "%s - Rev: unknown (0x%04x)", device_str, rev_id);
 
 	return ERROR_OK;
 }
@@ -1338,10 +1316,10 @@ COMMAND_HANDLER(stm32x_handle_options_read_command)
 
 	int user_data = optionbyte;
 
-	if (buf_get_u32((uint8_t *)&optionbyte, OPT_ERROR, 1))
+	if (optionbyte >> OPT_ERROR & 1)
 		command_print(CMD_CTX, "Option Byte Complement Error");
 
-	if (buf_get_u32((uint8_t *)&optionbyte, OPT_READOUT, 1))
+	if (optionbyte >> OPT_READOUT & 1)
 		command_print(CMD_CTX, "Readout Protection On");
 	else
 		command_print(CMD_CTX, "Readout Protection Off");
@@ -1349,23 +1327,23 @@ COMMAND_HANDLER(stm32x_handle_options_read_command)
 	/* user option bytes are offset depending on variant */
 	optionbyte >>= stm32x_info->option_offset;
 
-	if (buf_get_u32((uint8_t *)&optionbyte, OPT_RDWDGSW, 1))
+	if (optionbyte >> OPT_RDWDGSW & 1)
 		command_print(CMD_CTX, "Software Watchdog");
 	else
 		command_print(CMD_CTX, "Hardware Watchdog");
 
-	if (buf_get_u32((uint8_t *)&optionbyte, OPT_RDRSTSTOP, 1))
+	if (optionbyte >> OPT_RDRSTSTOP & 1)
 		command_print(CMD_CTX, "Stop: No reset generated");
 	else
 		command_print(CMD_CTX, "Stop: Reset generated");
 
-	if (buf_get_u32((uint8_t *)&optionbyte, OPT_RDRSTSTDBY, 1))
+	if (optionbyte >> OPT_RDRSTSTDBY & 1)
 		command_print(CMD_CTX, "Standby: No reset generated");
 	else
 		command_print(CMD_CTX, "Standby: Reset generated");
 
 	if (stm32x_info->has_dual_banks) {
-		if (buf_get_u32((uint8_t *)&optionbyte, OPT_BFB2, 1))
+		if (optionbyte >> OPT_BFB2 & 1)
 			command_print(CMD_CTX, "Boot: Bank 0");
 		else
 			command_print(CMD_CTX, "Boot: Bank 1");

@@ -15,7 +15,7 @@
 #    You should have received a copy of the GNU General Public License     #
 #    along with this program; if not, write to the                         #
 #    Free Software Foundation, Inc.,                                       #
-#    59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             #
+#    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           #
 ############################################################################
 
 # Define the name of our tools. Some distributions (e. g. Fedora) prefix
@@ -83,7 +83,7 @@ ulink_firmware.ihx: $(OBJECTS)
 	$(AS) -lsgo $@ $<
 
 clean:
-	rm -f *.asm *.lst *.rel *.rst *.sym *.ihx *.lnk *.map *.mem
+	rm -f *.asm *.lst *.rel *.rst *.sym *.ihx *.lk *.map *.mem
 
 hex: ulink_firmware.ihx
 	$(PACKIHX) ulink_firmware.ihx > ulink_firmware.hex

@@ -14,7 +14,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -241,8 +241,7 @@ RESULT versaloon_init(void)
 	uint32_t timeout_tmp;
 
 	/* malloc temporary buffer */
-	versaloon_buf =
-		(uint8_t *)malloc(versaloon_interface.usb_setting.buf_size);
+	versaloon_buf = malloc(versaloon_interface.usb_setting.buf_size);
 	if (NULL == versaloon_buf) {
 		LOG_ERROR(ERRMSG_NOT_ENOUGH_MEMORY);
 		return ERRCODE_NOT_ENOUGH_MEMORY;
@@ -274,15 +273,13 @@ RESULT versaloon_init(void)
 	free(versaloon_buf);
 	versaloon_buf = NULL;
 
-	versaloon_buf =
-		(uint8_t *)malloc(versaloon_interface.usb_setting.buf_size);
+	versaloon_buf = malloc(versaloon_interface.usb_setting.buf_size);
 	if (NULL == versaloon_buf) {
 		versaloon_fini();
 		LOG_ERROR(ERRMSG_NOT_ENOUGH_MEMORY);
 		return ERRCODE_NOT_ENOUGH_MEMORY;
 	}
-	versaloon_cmd_buf =
-		(uint8_t *)malloc(versaloon_interface.usb_setting.buf_size - 3);
+	versaloon_cmd_buf = malloc(versaloon_interface.usb_setting.buf_size - 3);
 	if (NULL == versaloon_cmd_buf) {
 		versaloon_fini();
 		LOG_ERROR(ERRMSG_NOT_ENOUGH_MEMORY);

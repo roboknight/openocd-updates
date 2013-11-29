@@ -16,13 +16,13 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifndef JTAG_LIBUSB_COMMON_H
 #define JTAG_LIBUSB_COMMON_H
 
-#include <libusb-1.0/libusb.h>
+#include <libusb.h>
 
 #define jtag_libusb_device			libusb_device
 #define jtag_libusb_device_handle		libusb_device_handle
@@ -40,6 +40,12 @@ static inline int jtag_libusb_claim_interface(jtag_libusb_device_handle *devh,
 {
 	return libusb_claim_interface(devh, iface);
 };
+
+static inline int jtag_libusb_release_interface(jtag_libusb_device_handle *devh,
+		int iface)
+{
+	return libusb_release_interface(devh, iface);
+}
 
 int jtag_libusb_open(const uint16_t vids[], const uint16_t pids[],
 		struct jtag_libusb_device_handle **out);

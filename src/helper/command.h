@@ -18,7 +18,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifndef COMMAND_H
@@ -162,9 +162,9 @@ struct command_invocation {
 typedef __COMMAND_HANDLER((*command_handler_t));
 
 struct command {
-	const char *name;
-	const char *help;
-	const char *usage;
+	char *name;
+	char *help;
+	char *usage;
 	struct command *parent;
 	struct command *children;
 	command_handler_t handler;
@@ -353,6 +353,7 @@ int parse_llong(const char *str, long long *ul);
 		int parse ## name(const char *str, type * ul)
 
 DECLARE_PARSE_WRAPPER(_uint, unsigned);
+DECLARE_PARSE_WRAPPER(_u64, uint64_t);
 DECLARE_PARSE_WRAPPER(_u32, uint32_t);
 DECLARE_PARSE_WRAPPER(_u16, uint16_t);
 DECLARE_PARSE_WRAPPER(_u8, uint8_t);

@@ -18,7 +18,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifndef _HL_INTERFACE
@@ -45,9 +45,11 @@ struct hl_interface_param_s {
 	/** */
 	enum hl_transports transport;
 	/** */
-	int max_buffer;
-	/** */
 	bool connect_under_reset;
+	/** Output file for trace data (if any) */
+	FILE *trace_f;
+	/** Trace module source clock rate */
+	uint32_t trace_source_hz;
 };
 
 struct hl_interface_s {
@@ -56,7 +58,7 @@ struct hl_interface_s {
 	/** */
 	const struct hl_layout *layout;
 	/** */
-	void *fd;
+	void *handle;
 };
 
 /** */

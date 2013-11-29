@@ -15,7 +15,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -38,6 +38,8 @@ static int oocd_trace_read_reg(struct oocd_trace *oocd_trace, int reg, uint32_t 
 
 	cmd = 0x10 | (reg & 0x7);
 	bytes_written = write(oocd_trace->tty_fd, &cmd, 1);
+	if (bytes_written < 1)
+		return ERROR_FAIL;
 
 	bytes_to_read = 4;
 	while (bytes_to_read > 0) {
@@ -62,6 +64,9 @@ static int oocd_trace_write_reg(struct oocd_trace *oocd_trace, int reg, uint32_t
 	data[4] = (value & 0xff000000) >> 24;
 
 	bytes_written = write(oocd_trace->tty_fd, data, 5);
+	if (bytes_written < 5)
+		return ERROR_FAIL;
+
 	LOG_DEBUG("reg #%i: 0x%8.8x", reg, value);
 
 	return ERROR_OK;
@@ -78,6 +83,8 @@ static int oocd_trace_read_memory(struct oocd_trace *oocd_trace, uint8_t *data, 
 
 	cmd = 0x20;
 	bytes_written = write(oocd_trace->tty_fd, &cmd, 1);
+	if (bytes_written < 1)
+		return ERROR_FAIL;
 
 	bytes_to_read = size * 16;
 	while (bytes_to_read > 0) {
@@ -358,6 +365,8 @@ COMMAND_HANDLER(handle_oocd_trace_resync_command)
 	cmd_array[0] = 0xf0;
 
 	bytes_written = write(oocd_trace->tty_fd, cmd_array, 1);
+	if (bytes_written < 1)
+		return ERROR_FAIL;
 
 	command_print(CMD_CTX, "requesting traceclock resync");
 	LOG_DEBUG("resyncing traceclk pll");

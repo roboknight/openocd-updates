@@ -36,7 +36,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -56,15 +56,24 @@
 #include "image.h"
 #include "rtos/rtos.h"
 
+/* default halt wait timeout (ms) */
+#define DEFAULT_HALT_TIMEOUT 5000
+
 static int target_read_buffer_default(struct target *target, uint32_t address,
-		uint32_t size, uint8_t *buffer);
+		uint32_t count, uint8_t *buffer);
 static int target_write_buffer_default(struct target *target, uint32_t address,
-		uint32_t size, const uint8_t *buffer);
+		uint32_t count, const uint8_t *buffer);
 static int target_array2mem(Jim_Interp *interp, struct target *target,
 		int argc, Jim_Obj * const *argv);
 static int target_mem2array(Jim_Interp *interp, struct target *target,
 		int argc, Jim_Obj * const *argv);
 static int target_register_user_commands(struct command_context *cmd_ctx);
+static int target_get_gdb_fileio_info_default(struct target *target,
+		struct gdb_fileio_info *fileio_info);
+static int target_gdb_fileio_end_default(struct target *target, int retcode,
+		int fileio_errno, bool ctrl_c);
+static int target_profiling_default(struct target *target, uint32_t *samples,
+		uint32_t max_num_samples, uint32_t *num_samples, uint32_t seconds);
 
 /* targets */
 extern struct target_type arm7tdmi_target;
@@ -78,7 +87,7 @@ extern struct target_type fa526_target;
 extern struct target_type feroceon_target;
 extern struct target_type dragonite_target;
 extern struct target_type xscale_target;
-extern struct target_type cortexm3_target;
+extern struct target_type cortexm_target;
 extern struct target_type cortexa8_target;
 extern struct target_type cortexr4_target;
 extern struct target_type arm11_target;
@@ -89,6 +98,10 @@ extern struct target_type dsp5680xx_target;
 extern struct target_type testee_target;
 extern struct target_type avr32_ap7k_target;
 extern struct target_type hla_target;
+extern struct target_type nds32_v2_target;
+extern struct target_type nds32_v3_target;
+extern struct target_type nds32_v3m_target;
+extern struct target_type or1k_target;
 
 static struct target_type *target_types[] = {
 	&arm7tdmi_target,
@@ -102,7 +115,7 @@ static struct target_type *target_types[] = {
 	&feroceon_target,
 	&dragonite_target,
 	&xscale_target,
-	&cortexm3_target,
+	&cortexm_target,
 	&cortexa8_target,
 	&cortexr4_target,
 	&arm11_target,
@@ -113,6 +126,10 @@ static struct target_type *target_types[] = {
 	&testee_target,
 	&avr32_ap7k_target,
 	&hla_target,
+	&nds32_v2_target,
+	&nds32_v3_target,
+	&nds32_v3m_target,
+	&or1k_target,
 	NULL,
 };
 
@@ -215,6 +232,7 @@ static const Jim_Nvp nvp_target_debug_reason[] = {
 	{ .name = "watchpoint-and-breakpoint", .value = DBG_REASON_WPTANDBKPT },
 	{ .name = "single-step"              , .value = DBG_REASON_SINGLESTEP },
 	{ .name = "target-not-halted"        , .value = DBG_REASON_NOTHALTED  },
+	{ .name = "program-exit"             , .value = DBG_REASON_EXIT },
 	{ .name = "undefined"                , .value = DBG_REASON_UNDEFINED },
 	{ .name = NULL, .value = -1 },
 };
@@ -359,7 +377,7 @@ void target_buffer_get_u16_array(struct target *target, const uint8_t *buffer, u
 }
 
 /* write a uint32_t array to a buffer in target memory endianness */
-void target_buffer_set_u32_array(struct target *target, uint8_t *buffer, uint32_t count, uint32_t *srcbuf)
+void target_buffer_set_u32_array(struct target *target, uint8_t *buffer, uint32_t count, const uint32_t *srcbuf)
 {
 	uint32_t i;
 	for (i = 0; i < count; i++)
@@ -367,7 +385,7 @@ void target_buffer_set_u32_array(struct target *target, uint8_t *buffer, uint32_
 }
 
 /* write a uint16_t array to a buffer in target memory endianness */
-void target_buffer_set_u16_array(struct target *target, uint8_t *buffer, uint32_t count, uint16_t *srcbuf)
+void target_buffer_set_u16_array(struct target *target, uint8_t *buffer, uint32_t count, const uint16_t *srcbuf)
 {
 	uint32_t i;
 	for (i = 0; i < count; i++)
@@ -450,7 +468,7 @@ int target_poll(struct target *target)
 			target->halt_issued = false;
 		else {
 			long long t = timeval_ms() - target->halt_issued_time;
-			if (t > 1000) {
+			if (t > DEFAULT_HALT_TIMEOUT) {
 				target->halt_issued = false;
 				LOG_INFO("Halt timed out, wake up GDB.");
 				target_call_event_callbacks(target, TARGET_EVENT_GDB_HALT);
@@ -569,8 +587,10 @@ static int target_process_reset(struct command_context *cmd_ctx, enum target_res
 	retval = target_call_timer_callbacks_now();
 
 	struct target *target;
-	for (target = all_targets; target; target = target->next)
+	for (target = all_targets; target; target = target->next) {
 		target->type->check_reset(target);
+		target->running_alg = false;
+	}
 
 	return retval;
 }
@@ -970,12 +990,6 @@ int target_write_phys_memory(struct target *target,
 	return target->type->write_phys_memory(target, address, size, count, buffer);
 }
 
-static int target_bulk_write_memory_default(struct target *target,
-		uint32_t address, uint32_t count, const uint8_t *buffer)
-{
-	return target_write_memory(target, address, 4, count, buffer);
-}
-
 int target_add_breakpoint(struct target *target,
 		struct breakpoint *breakpoint)
 {
@@ -1026,16 +1040,63 @@ int target_remove_watchpoint(struct target *target,
 {
 	return target->type->remove_watchpoint(target, watchpoint);
 }
+int target_hit_watchpoint(struct target *target,
+		struct watchpoint **hit_watchpoint)
+{
+	if (target->state != TARGET_HALTED) {
+		LOG_WARNING("target %s is not halted", target->cmd_name);
+		return ERROR_TARGET_NOT_HALTED;
+	}
+
+	if (target->type->hit_watchpoint == NULL) {
+		/* For backward compatible, if hit_watchpoint is not implemented,
+		 * return ERROR_FAIL such that gdb_server will not take the nonsense
+		 * information. */
+		return ERROR_FAIL;
+	}
+
+	return target->type->hit_watchpoint(target, hit_watchpoint);
+}
 
 int target_get_gdb_reg_list(struct target *target,
-		struct reg **reg_list[], int *reg_list_size)
+		struct reg **reg_list[], int *reg_list_size,
+		enum target_register_class reg_class)
 {
-	return target->type->get_gdb_reg_list(target, reg_list, reg_list_size);
+	return target->type->get_gdb_reg_list(target, reg_list, reg_list_size, reg_class);
 }
 int target_step(struct target *target,
 		int current, uint32_t address, int handle_breakpoints)
 {
 	return target->type->step(target, current, address, handle_breakpoints);
+}
+
+int target_get_gdb_fileio_info(struct target *target, struct gdb_fileio_info *fileio_info)
+{
+	if (target->state != TARGET_HALTED) {
+		LOG_WARNING("target %s is not halted", target->cmd_name);
+		return ERROR_TARGET_NOT_HALTED;
+	}
+	return target->type->get_gdb_fileio_info(target, fileio_info);
+}
+
+int target_gdb_fileio_end(struct target *target, int retcode, int fileio_errno, bool ctrl_c)
+{
+	if (target->state != TARGET_HALTED) {
+		LOG_WARNING("target %s is not halted", target->cmd_name);
+		return ERROR_TARGET_NOT_HALTED;
+	}
+	return target->type->gdb_fileio_end(target, retcode, fileio_errno, ctrl_c);
+}
+
+int target_profiling(struct target *target, uint32_t *samples,
+			uint32_t max_num_samples, uint32_t *num_samples, uint32_t seconds)
+{
+	if (target->state != TARGET_HALTED) {
+		LOG_WARNING("target %s is not halted", target->cmd_name);
+		return ERROR_TARGET_NOT_HALTED;
+	}
+	return target->type->profiling(target, samples, max_num_samples,
+			num_samples, seconds);
 }
 
 /**
@@ -1121,8 +1182,14 @@ static int target_init_one(struct command_context *cmd_ctx,
 	if (target->type->write_buffer == NULL)
 		target->type->write_buffer = target_write_buffer_default;
 
-	if (target->type->bulk_write_memory == NULL)
-		target->type->bulk_write_memory = target_bulk_write_memory_default;
+	if (target->type->get_gdb_fileio_info == NULL)
+		target->type->get_gdb_fileio_info = target_get_gdb_fileio_info_default;
+
+	if (target->type->gdb_fileio_end == NULL)
+		target->type->gdb_fileio_end = target_gdb_fileio_end_default;
+
+	if (target->type->profiling == NULL)
+		target->type->profiling = target_profiling_default;
 
 	return ERROR_OK;
 }
@@ -1673,6 +1740,71 @@ int target_arch_state(struct target *target)
 	return retval;
 }
 
+static int target_get_gdb_fileio_info_default(struct target *target,
+		struct gdb_fileio_info *fileio_info)
+{
+	/* If target does not support semi-hosting function, target
+	   has no need to provide .get_gdb_fileio_info callback.
+	   It just return ERROR_FAIL and gdb_server will return "Txx"
+	   as target halted every time.  */
+	return ERROR_FAIL;
+}
+
+static int target_gdb_fileio_end_default(struct target *target,
+		int retcode, int fileio_errno, bool ctrl_c)
+{
+	return ERROR_OK;
+}
+
+static int target_profiling_default(struct target *target, uint32_t *samples,
+		uint32_t max_num_samples, uint32_t *num_samples, uint32_t seconds)
+{
+	struct timeval timeout, now;
+
+	gettimeofday(&timeout, NULL);
+	timeval_add_time(&timeout, seconds, 0);
+
+	LOG_INFO("Starting profiling. Halting and resuming the"
+			" target as often as we can...");
+
+	uint32_t sample_count = 0;
+	/* hopefully it is safe to cache! We want to stop/restart as quickly as possible. */
+	struct reg *reg = register_get_by_name(target->reg_cache, "pc", 1);
+
+	int retval = ERROR_OK;
+	for (;;) {
+		target_poll(target);
+		if (target->state == TARGET_HALTED) {
+			uint32_t t = *((uint32_t *)reg->value);
+			samples[sample_count++] = t;
+			/* current pc, addr = 0, do not handle breakpoints, not debugging */
+			retval = target_resume(target, 1, 0, 0, 0);
+			target_poll(target);
+			alive_sleep(10); /* sleep 10ms, i.e. <100 samples/second. */
+		} else if (target->state == TARGET_RUNNING) {
+			/* We want to quickly sample the PC. */
+			retval = target_halt(target);
+		} else {
+			LOG_INFO("Target not halted or running");
+			retval = ERROR_OK;
+			break;
+		}
+
+		if (retval != ERROR_OK)
+			break;
+
+		gettimeofday(&now, NULL);
+		if ((sample_count >= max_num_samples) ||
+			((now.tv_sec >= timeout.tv_sec) && (now.tv_usec >= timeout.tv_usec))) {
+			LOG_INFO("Profiling completed. %" PRIu32 " samples.", sample_count);
+			break;
+		}
+	}
+
+	*num_samples = sample_count;
+	return retval;
+}
+
 /* Single aligned words are guaranteed to use 16 or 32 bit access
  * mode respectively, otherwise data is handled as quickly as
  * possible
@@ -1701,57 +1833,37 @@ int target_write_buffer(struct target *target, uint32_t address, uint32_t size, 
 	return target->type->write_buffer(target, address, size, buffer);
 }
 
-static int target_write_buffer_default(struct target *target, uint32_t address, uint32_t size, const uint8_t *buffer)
+static int target_write_buffer_default(struct target *target, uint32_t address, uint32_t count, const uint8_t *buffer)
 {
-	int retval = ERROR_OK;
+	uint32_t size;
 
-	if (((address % 2) == 0) && (size == 2))
-		return target_write_memory(target, address, 2, 1, buffer);
-
-	/* handle unaligned head bytes */
-	if (address % 4) {
-		uint32_t unaligned = 4 - (address % 4);
-
-		if (unaligned > size)
-			unaligned = size;
-
-		retval = target_write_memory(target, address, 1, unaligned, buffer);
-		if (retval != ERROR_OK)
-			return retval;
-
-		buffer += unaligned;
-		address += unaligned;
-		size -= unaligned;
-	}
-
-	/* handle aligned words */
-	if (size >= 4) {
-		int aligned = size - (size % 4);
-
-		/* use bulk writes above a certain limit. This may have to be changed */
-		if (aligned > 128) {
-			retval = target->type->bulk_write_memory(target, address, aligned / 4, buffer);
+	/* Align up to maximum 4 bytes. The loop condition makes sure the next pass
+	 * will have something to do with the size we leave to it. */
+	for (size = 1; size < 4 && count >= size * 2 + (address & size); size *= 2) {
+		if (address & size) {
+			int retval = target_write_memory(target, address, size, 1, buffer);
 			if (retval != ERROR_OK)
 				return retval;
-		} else {
-			retval = target_write_memory(target, address, 4, aligned / 4, buffer);
-			if (retval != ERROR_OK)
-				return retval;
+			address += size;
+			count -= size;
+			buffer += size;
 		}
-
-		buffer += aligned;
-		address += aligned;
-		size -= aligned;
 	}
 
-	/* handle tail writes of less than 4 bytes */
-	if (size > 0) {
-		retval = target_write_memory(target, address, 1, size, buffer);
-		if (retval != ERROR_OK)
-			return retval;
+	/* Write the data with as large access size as possible. */
+	for (; size > 0; size /= 2) {
+		uint32_t aligned = count - count % size;
+		if (aligned > 0) {
+			int retval = target_write_memory(target, address, size, aligned / size, buffer);
+			if (retval != ERROR_OK)
+				return retval;
+			address += aligned;
+			count -= aligned;
+			buffer += aligned;
+		}
 	}
 
-	return retval;
+	return ERROR_OK;
 }
 
 /* Single aligned words are guaranteed to use 16 or 32 bit access
@@ -1782,58 +1894,34 @@ int target_read_buffer(struct target *target, uint32_t address, uint32_t size, u
 	return target->type->read_buffer(target, address, size, buffer);
 }
 
-static int target_read_buffer_default(struct target *target, uint32_t address, uint32_t size, uint8_t *buffer)
+static int target_read_buffer_default(struct target *target, uint32_t address, uint32_t count, uint8_t *buffer)
 {
-	int retval = ERROR_OK;
+	uint32_t size;
 
-	if (((address % 2) == 0) && (size == 2))
-		return target_read_memory(target, address, 2, 1, buffer);
-
-	/* handle unaligned head bytes */
-	if (address % 4) {
-		uint32_t unaligned = 4 - (address % 4);
-
-		if (unaligned > size)
-			unaligned = size;
-
-		retval = target_read_memory(target, address, 1, unaligned, buffer);
-		if (retval != ERROR_OK)
-			return retval;
-
-		buffer += unaligned;
-		address += unaligned;
-		size -= unaligned;
+	/* Align up to maximum 4 bytes. The loop condition makes sure the next pass
+	 * will have something to do with the size we leave to it. */
+	for (size = 1; size < 4 && count >= size * 2 + (address & size); size *= 2) {
+		if (address & size) {
+			int retval = target_read_memory(target, address, size, 1, buffer);
+			if (retval != ERROR_OK)
+				return retval;
+			address += size;
+			count -= size;
+			buffer += size;
+		}
 	}
 
-	/* handle aligned words */
-	if (size >= 4) {
-		int aligned = size - (size % 4);
-
-		retval = target_read_memory(target, address, 4, aligned / 4, buffer);
-		if (retval != ERROR_OK)
-			return retval;
-
-		buffer += aligned;
-		address += aligned;
-		size -= aligned;
-	}
-
-	/*prevent byte access when possible (avoid AHB access limitations in some cases)*/
-	if (size	>= 2) {
-		int aligned = size - (size % 2);
-		retval = target_read_memory(target, address, 2, aligned / 2, buffer);
-		if (retval != ERROR_OK)
-			return retval;
-
-		buffer += aligned;
-		address += aligned;
-		size -= aligned;
-	}
-	/* handle tail writes of less than 4 bytes */
-	if (size > 0) {
-		retval = target_read_memory(target, address, 1, size, buffer);
-		if (retval != ERROR_OK)
-			return retval;
+	/* Read the data with as large access size as possible. */
+	for (; size > 0; size /= 2) {
+		uint32_t aligned = count - count % size;
+		if (aligned > 0) {
+			int retval = target_read_memory(target, address, size, aligned / size, buffer);
+			if (retval != ERROR_OK)
+				return retval;
+			address += aligned;
+			count -= aligned;
+			buffer += aligned;
+		}
 	}
 
 	return ERROR_OK;
@@ -1945,11 +2033,12 @@ int target_read_u16(struct target *target, uint32_t address, uint16_t *value)
 
 int target_read_u8(struct target *target, uint32_t address, uint8_t *value)
 {
-	int retval = target_read_memory(target, address, 1, 1, value);
 	if (!target_was_examined(target)) {
 		LOG_ERROR("Target not examined yet");
 		return ERROR_FAIL;
 	}
+
+	int retval = target_read_memory(target, address, 1, 1, value);
 
 	if (retval == ERROR_OK) {
 		LOG_DEBUG("address: 0x%8.8" PRIx32 ", value: 0x%2.2x",
@@ -2403,13 +2492,11 @@ COMMAND_HANDLER(handle_wait_halt_command)
 	if (CMD_ARGC > 1)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 
-	unsigned ms = 5000;
+	unsigned ms = DEFAULT_HALT_TIMEOUT;
 	if (1 == CMD_ARGC) {
 		int retval = parse_uint(CMD_ARGV[0], &ms);
 		if (ERROR_OK != retval)
 			return ERROR_COMMAND_SYNTAX_ERROR;
-		/* convert seconds (given) to milliseconds (needed) */
-		ms *= 1000;
 	}
 
 	struct target *target = get_current_target(CMD_CTX);
@@ -2660,12 +2747,6 @@ COMMAND_HANDLER(handle_md_command)
 typedef int (*target_write_fn)(struct target *target,
 		uint32_t address, uint32_t size, uint32_t count, const uint8_t *buffer);
 
-static int target_write_memory_fast(struct target *target,
-		uint32_t address, uint32_t size, uint32_t count, const uint8_t *buffer)
-{
-	return target_write_buffer(target, address, size * count, buffer);
-}
-
 static int target_fill_mem(struct target *target,
 		uint32_t address,
 		target_write_fn fn,
@@ -2730,7 +2811,7 @@ COMMAND_HANDLER(handle_mw_command)
 		CMD_ARGV++;
 		fn = target_write_phys_memory;
 	} else
-		fn = target_write_memory_fast;
+		fn = target_write_memory;
 	if ((CMD_ARGC < 2) || (CMD_ARGC > 3))
 		return ERROR_COMMAND_SYNTAX_ERROR;
 
@@ -3342,8 +3423,11 @@ static void writeString(FILE *f, char *s)
 	writeData(f, s, strlen(s));
 }
 
+typedef unsigned char UNIT[2];  /* unit of profiling */
+
 /* Dump a gmon.out histogram file. */
-static void writeGmon(uint32_t *samples, uint32_t sampleNum, const char *filename)
+static void write_gmon(uint32_t *samples, uint32_t sampleNum, const char *filename,
+		bool with_range, uint32_t start_address, uint32_t end_address)
 {
 	uint32_t i;
 	FILE *f = fopen(filename, "w");
@@ -3359,33 +3443,50 @@ static void writeGmon(uint32_t *samples, uint32_t sampleNum, const char *filenam
 	writeData(f, &zero, 1);
 
 	/* figure out bucket size */
-	uint32_t min = samples[0];
-	uint32_t max = samples[0];
-	for (i = 0; i < sampleNum; i++) {
-		if (min > samples[i])
-			min = samples[i];
-		if (max < samples[i])
-			max = samples[i];
+	uint32_t min;
+	uint32_t max;
+	if (with_range) {
+		min = start_address;
+		max = end_address;
+	} else {
+		min = samples[0];
+		max = samples[0];
+		for (i = 0; i < sampleNum; i++) {
+			if (min > samples[i])
+				min = samples[i];
+			if (max < samples[i])
+				max = samples[i];
+		}
+
+		/* max should be (largest sample + 1)
+		 * Refer to binutils/gprof/hist.c (find_histogram_for_pc) */
+		max++;
 	}
 
-	int addressSpace = (max - min + 1);
+	int addressSpace = max - min;
 	assert(addressSpace >= 2);
 
-	static const uint32_t maxBuckets = 16 * 1024; /* maximum buckets. */
-	uint32_t length = addressSpace;
-	if (length > maxBuckets)
-		length = maxBuckets;
-	int *buckets = malloc(sizeof(int)*length);
+	/* FIXME: What is the reasonable number of buckets?
+	 * The profiling result will be more accurate if there are enough buckets. */
+	static const uint32_t maxBuckets = 128 * 1024; /* maximum buckets. */
+	uint32_t numBuckets = addressSpace / sizeof(UNIT);
+	if (numBuckets > maxBuckets)
+		numBuckets = maxBuckets;
+	int *buckets = malloc(sizeof(int) * numBuckets);
 	if (buckets == NULL) {
 		fclose(f);
 		return;
 	}
-	memset(buckets, 0, sizeof(int) * length);
+	memset(buckets, 0, sizeof(int) * numBuckets);
 	for (i = 0; i < sampleNum; i++) {
 		uint32_t address = samples[i];
+
+		if ((address < min) || (max <= address))
+			continue;
+
 		long long a = address - min;
-		long long b = length - 1;
-		long long c = addressSpace - 1;
+		long long b = numBuckets;
+		long long c = addressSpace;
 		int index_t = (a * b) / c; /* danger!!!! int32 overflows */
 		buckets[index_t]++;
 	}
@@ -3393,7 +3494,7 @@ static void writeGmon(uint32_t *samples, uint32_t sampleNum, const char *filenam
 	/* append binary memory gmon.out &profile_hist_hdr ((char*)&profile_hist_hdr + sizeof(struct gmon_hist_hdr)) */
 	writeLong(f, min);			/* low_pc */
 	writeLong(f, max);			/* high_pc */
-	writeLong(f, length);		/* # of samples */
+	writeLong(f, numBuckets);	/* # of buckets */
 	writeLong(f, 100);			/* KLUDGE! We lie, ca. 100Hz best case. */
 	writeString(f, "seconds");
 	for (i = 0; i < (15-strlen("seconds")); i++)
@@ -3402,9 +3503,9 @@ static void writeGmon(uint32_t *samples, uint32_t sampleNum, const char *filenam
 
 	/*append binary memory gmon.out profile_hist_data (profile_hist_data + profile_hist_hdr.hist_size) */
 
-	char *data = malloc(2 * length);
+	char *data = malloc(2 * numBuckets);
 	if (data != NULL) {
-		for (i = 0; i < length; i++) {
+		for (i = 0; i < numBuckets; i++) {
 			int val;
 			val = buckets[i];
 			if (val > 65535)
@@ -3413,7 +3514,7 @@ static void writeGmon(uint32_t *samples, uint32_t sampleNum, const char *filenam
 			data[i * 2 + 1] = (val >> 8) & 0xff;
 		}
 		free(buckets);
-		writeData(f, data, length * 2);
+		writeData(f, data, numBuckets * 2);
 		free(data);
 	} else
 		free(buckets);
@@ -3426,84 +3527,69 @@ static void writeGmon(uint32_t *samples, uint32_t sampleNum, const char *filenam
 COMMAND_HANDLER(handle_profile_command)
 {
 	struct target *target = get_current_target(CMD_CTX);
-	struct timeval timeout, now;
 
-	gettimeofday(&timeout, NULL);
-	if (CMD_ARGC != 2)
+	if ((CMD_ARGC != 2) && (CMD_ARGC != 4))
 		return ERROR_COMMAND_SYNTAX_ERROR;
-	unsigned offset;
-	COMMAND_PARSE_NUMBER(uint, CMD_ARGV[0], offset);
 
-	timeval_add_time(&timeout, offset, 0);
+	const uint32_t MAX_PROFILE_SAMPLE_NUM = 10000;
+	uint32_t offset;
+	uint32_t num_of_sampels;
+	int retval = ERROR_OK;
+	uint32_t *samples = malloc(sizeof(uint32_t) * MAX_PROFILE_SAMPLE_NUM);
+	if (samples == NULL) {
+		LOG_ERROR("No memory to store samples.");
+		return ERROR_FAIL;
+	}
+
+	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], offset);
 
 	/**
-	 * @todo: Some cores let us sample the PC without the
+	 * Some cores let us sample the PC without the
 	 * annoying halt/resume step; for example, ARMv7 PCSR.
 	 * Provide a way to use that more efficient mechanism.
 	 */
+	retval = target_profiling(target, samples, MAX_PROFILE_SAMPLE_NUM,
+				&num_of_sampels, offset);
+	if (retval != ERROR_OK) {
+		free(samples);
+		return retval;
+	}
 
-	command_print(CMD_CTX, "Starting profiling. Halting and resuming the target as often as we can...");
+	assert(num_of_sampels <= MAX_PROFILE_SAMPLE_NUM);
 
-	static const int maxSample = 10000;
-	uint32_t *samples = malloc(sizeof(uint32_t)*maxSample);
-	if (samples == NULL)
-		return ERROR_OK;
-
-	int numSamples = 0;
-	/* hopefully it is safe to cache! We want to stop/restart as quickly as possible. */
-	struct reg *reg = register_get_by_name(target->reg_cache, "pc", 1);
-
-	int retval = ERROR_OK;
-	for (;;) {
-		target_poll(target);
-		if (target->state == TARGET_HALTED) {
-			uint32_t t = *((uint32_t *)reg->value);
-			samples[numSamples++] = t;
-			/* current pc, addr = 0, do not handle breakpoints, not debugging */
-			retval = target_resume(target, 1, 0, 0, 0);
-			target_poll(target);
-			alive_sleep(10); /* sleep 10ms, i.e. <100 samples/second. */
-		} else if (target->state == TARGET_RUNNING) {
-			/* We want to quickly sample the PC. */
-			retval = target_halt(target);
-			if (retval != ERROR_OK) {
-				free(samples);
-				return retval;
-			}
-		} else {
-			command_print(CMD_CTX, "Target not halted or running");
-			retval = ERROR_OK;
-			break;
-		}
-		if (retval != ERROR_OK)
-			break;
-
-		gettimeofday(&now, NULL);
-		if ((numSamples >= maxSample) || ((now.tv_sec >= timeout.tv_sec)
-				&& (now.tv_usec >= timeout.tv_usec))) {
-			command_print(CMD_CTX, "Profiling completed. %d samples.", numSamples);
-			retval = target_poll(target);
-			if (retval != ERROR_OK) {
-				free(samples);
-				return retval;
-			}
-			if (target->state == TARGET_HALTED) {
-				/* current pc, addr = 0, do not handle
-				 * breakpoints, not debugging */
-				target_resume(target, 1, 0, 0, 0);
-			}
-			retval = target_poll(target);
-			if (retval != ERROR_OK) {
-				free(samples);
-				return retval;
-			}
-			writeGmon(samples, numSamples, CMD_ARGV[1]);
-			command_print(CMD_CTX, "Wrote %s", CMD_ARGV[1]);
-			break;
+	retval = target_poll(target);
+	if (retval != ERROR_OK) {
+		free(samples);
+		return retval;
+	}
+	if (target->state == TARGET_RUNNING) {
+		retval = target_halt(target);
+		if (retval != ERROR_OK) {
+			free(samples);
+			return retval;
 		}
 	}
-	free(samples);
 
+	retval = target_poll(target);
+	if (retval != ERROR_OK) {
+		free(samples);
+		return retval;
+	}
+
+	uint32_t start_address = 0;
+	uint32_t end_address = 0;
+	bool with_range = false;
+	if (CMD_ARGC == 4) {
+		with_range = true;
+		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], start_address);
+		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[3], end_address);
+	}
+
+	write_gmon(samples, num_of_sampels, CMD_ARGV[1],
+			with_range, start_address, end_address);
+	command_print(CMD_CTX, "Wrote %s", CMD_ARGV[1]);
+
+	free(samples);
 	return retval;
 }
 
@@ -3681,6 +3767,7 @@ static int target_mem2array(Jim_Interp *interp, struct target *target, int argc,
 				new_int_array_element(interp, varname, n, v);
 			}
 			len -= count;
+			addr += count * width;
 		}
 	}
 
@@ -3874,6 +3961,7 @@ static int target_array2mem(Jim_Interp *interp, struct target *target,
 			e = JIM_ERR;
 			break;
 		}
+		addr += count * width;
 	}
 
 	free(buffer);
@@ -4174,11 +4262,10 @@ no_params:
 										   n->name);
 					return JIM_ERR;
 				}
-				if (target->variant)
-					free((void *)(target->variant));
 				e = Jim_GetOpt_String(goi, &cp, NULL);
 				if (e != JIM_OK)
 					return e;
+				free(target->variant);
 				target->variant = strdup(cp);
 			} else {
 				if (goi->argc != 0)
@@ -4286,7 +4373,7 @@ static int jim_target_mw(Jim_Interp *interp, int argc, Jim_Obj *const *argv)
 	}
 
 	target_write_fn fn;
-	fn = target_write_memory_fast;
+	fn = target_write_memory;
 
 	int e;
 	if (strcmp(Jim_GetString(argv[1], NULL), "phys") == 0) {
@@ -5016,7 +5103,7 @@ static int target_create(Jim_GetOptInfo *goi)
 	}
 
 	/* now - create the new target name command */
-	const const struct command_registration target_subcommands[] = {
+	const struct command_registration target_subcommands[] = {
 		{
 			.chain = target_instance_command_handlers,
 		},
@@ -5025,7 +5112,7 @@ static int target_create(Jim_GetOptInfo *goi)
 		},
 		COMMAND_REGISTRATION_DONE
 	};
-	const const struct command_registration target_commands[] = {
+	const struct command_registration target_commands[] = {
 		{
 			.name = cp,
 			.mode = COMMAND_ANY,
@@ -5353,7 +5440,7 @@ COMMAND_HANDLER(handle_fast_load_image_command)
 			fastload[i].data = malloc(length);
 			if (fastload[i].data == NULL) {
 				free(buffer);
-				command_print(CMD_CTX, "error allocating buffer for section (%d bytes)",
+				command_print(CMD_CTX, "error allocating buffer for section (%" PRIu32 " bytes)",
 							  length);
 				retval = ERROR_FAIL;
 				break;
@@ -5498,7 +5585,7 @@ static const struct command_registration target_exec_command_handlers[] = {
 		.name = "profile",
 		.handler = handle_profile_command,
 		.mode = COMMAND_EXEC,
-		.usage = "seconds filename",
+		.usage = "seconds filename [start end]",
 		.help = "profiling samples the CPU PC",
 	},
 	/** @todo don't register virt2phys() unless target supports it */
@@ -5529,7 +5616,7 @@ static const struct command_registration target_exec_command_handlers[] = {
 		.handler = handle_wait_halt_command,
 		.mode = COMMAND_EXEC,
 		.help = "wait up to the specified number of milliseconds "
-			"(default 5) for a previously requested halt",
+			"(default 5000) for a previously requested halt",
 		.usage = "[milliseconds]",
 	},
 	{
@@ -5537,7 +5624,7 @@ static const struct command_registration target_exec_command_handlers[] = {
 		.handler = handle_halt_command,
 		.mode = COMMAND_EXEC,
 		.help = "request target to halt, then wait up to the specified"
-			"number of milliseconds (default 5) for it to complete",
+			"number of milliseconds (default 5000) for it to complete",
 		.usage = "[milliseconds]",
 	},
 	{

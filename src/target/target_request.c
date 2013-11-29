@@ -21,7 +21,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -121,6 +121,8 @@ static int target_hexmsg(struct target *target, int size, uint32_t length)
 int target_request(struct target *target, uint32_t request)
 {
 	target_req_cmd_t target_req_cmd = request & 0xff;
+
+	assert(target->type->target_request_data);
 
 	/* Record that we got a target message for back-off algorithm */
 	got_message = true;
@@ -255,6 +257,11 @@ COMMAND_HANDLER(handle_target_request_debugmsgs_command)
 	struct target *target = get_current_target(CMD_CTX);
 
 	int receiving = 0;
+
+	if (target->type->target_request_data == NULL) {
+		LOG_ERROR("Target %s does not support target requests", target_name(target));
+		return ERROR_OK;
+	}
 
 	/* see if reciever is already registered */
 	if (find_debug_msg_receiver(CMD_CTX, target) != NULL)

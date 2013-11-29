@@ -1,34 +1,32 @@
 include $(top_srcdir)/common.mk
 
 noinst_LTLIBRARIES = libocdjtagdrivers.la
+libocdjtagdrivers_la_LIBADD =
 
 libocdjtagdrivers_la_SOURCES = \
 	$(DRIVERFILES)
 
-ocddatadir = $(pkglibdir)
-nobase_dist_ocddata_DATA =
+libocdjtagdrivers_la_CPPFLAGS = $(AM_CPPFLAGS) $(LIBUSB1_CFLAGS) $(LIBUSB0_CFLAGS)
 
 ULINK_FIRMWARE = $(srcdir)/OpenULINK
 
 EXTRA_DIST = $(ULINK_FIRMWARE)
 
 DRIVERFILES =
+SUBDIRS=
 
 # Standard Driver: common files
 DRIVERFILES += driver.c
 
-if USB
-DRIVERFILES += usb_common.c
-endif
-
 if USE_LIBUSB1
 DRIVERFILES += libusb1_common.c
-else
-
-if USE_LIBUSB0
-DRIVERFILES += libusb0_common.c
 endif
 
+if USE_LIBUSB0
+DRIVERFILES += usb_common.c
+if !USE_LIBUSB1
+DRIVERFILES += libusb0_common.c
+endif
 endif
 
 if BITBANG
@@ -43,11 +41,15 @@ endif
 if FT2232_DRIVER
 DRIVERFILES += ft2232.c
 endif
-if FTDI_DRIVER
+if FTDI
 DRIVERFILES += ftdi.c mpsse.c
 endif
+if JTAG_VPI
+DRIVERFILES += jtag_vpi.c
+endif
 if USB_BLASTER_DRIVER
-DRIVERFILES += usb_blaster.c
+SUBDIRS += usb_blaster
+libocdjtagdrivers_la_LIBADD += $(top_builddir)/src/jtag/drivers/usb_blaster/libocdusbblaster.la
 endif
 if AMTJTAGACCEL
 DRIVERFILES += amt_jtagaccel.c
@@ -78,7 +80,8 @@ DRIVERFILES += rlink.c rlink_speed_table.c
 endif
 if ULINK
 DRIVERFILES += ulink.c
-nobase_dist_ocddata_DATA += $(ULINK_FIRMWARE)/ulink_firmware.hex
+ulinkdir = $(pkgdatadir)/OpenULINK
+dist_ulink_DATA = $(ULINK_FIRMWARE)/ulink_firmware.hex
 endif
 if VSLLINK
 DRIVERFILES += versaloon/usbtoxxx/usbtogpio.c
@@ -110,6 +113,13 @@ DRIVERFILES += opendous.c
 endif
 if SYSFSGPIO
 DRIVERFILES += sysfsgpio.c
+endif
+if BCM2835GPIO
+DRIVERFILES += bcm2835gpio.c
+endif
+
+if OPENJTAG
+DRIVERFILES += openjtag.c
 endif
 
 noinst_HEADERS = \

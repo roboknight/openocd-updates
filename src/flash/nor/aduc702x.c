@@ -16,7 +16,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -206,8 +206,10 @@ static int aduc702x_write_block(struct flash_bank *bank,
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
-	retval = target_write_buffer(target, write_algorithm->address,
-			sizeof(aduc702x_flash_write_code), (uint8_t *)aduc702x_flash_write_code);
+	uint8_t code[sizeof(aduc702x_flash_write_code)];
+	target_buffer_set_u32_array(target, code, ARRAY_SIZE(aduc702x_flash_write_code),
+			aduc702x_flash_write_code);
+	retval = target_write_buffer(target, write_algorithm->address, sizeof(code), code);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -352,12 +354,6 @@ static int aduc702x_probe(struct flash_bank *bank)
 	return ERROR_OK;
 }
 
-static int aduc702x_info(struct flash_bank *bank, char *buf, int buf_size)
-{
-	snprintf(buf, buf_size, "aduc702x flash driver info");
-	return ERROR_OK;
-}
-
 /* sets FEEMOD bit 3
  * enable = 1 enables writes & erases, 0 disables them */
 static int aduc702x_set_write_enable(struct target *target, int enable)
@@ -407,5 +403,4 @@ struct flash_driver aduc702x_flash = {
 	.auto_probe = aduc702x_probe,
 	.erase_check = default_flash_blank_check,
 	.protect_check = aduc702x_protect_check,
-	.info = aduc702x_info
 };

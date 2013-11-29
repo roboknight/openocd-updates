@@ -18,7 +18,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -36,8 +36,7 @@ static char **script_search_dirs;
 void add_script_search_dir(const char *dir)
 {
 	num_script_dirs++;
-	script_search_dirs =
-		(char **)realloc(script_search_dirs, (num_script_dirs + 1) * sizeof(char *));
+	script_search_dirs = realloc(script_search_dirs, (num_script_dirs + 1) * sizeof(char *));
 
 	script_search_dirs[num_script_dirs-1] = strdup(dir);
 	script_search_dirs[num_script_dirs] = NULL;
@@ -48,8 +47,7 @@ void add_script_search_dir(const char *dir)
 void add_config_command(const char *cfg)
 {
 	num_config_files++;
-	config_file_names =
-		(char **)realloc(config_file_names, (num_config_files + 1) * sizeof(char *));
+	config_file_names = realloc(config_file_names, (num_config_files + 1) * sizeof(char *));
 
 	config_file_names[num_config_files-1] = strdup(cfg);
 	config_file_names[num_config_files] = NULL;
@@ -127,4 +125,48 @@ int parse_config_file(struct command_context *cmd_ctx)
 	}
 
 	return ERROR_OK;
+}
+
+#ifndef _WIN32
+#include <pwd.h>
+#endif
+
+char *get_home_dir(const char *append_path)
+{
+	char *home = getenv("HOME");
+
+	if (home == NULL) {
+
+#ifdef _WIN32
+		home = getenv("USERPROFILE");
+
+		if (home == NULL) {
+
+			char homepath[MAX_PATH];
+			char *drive = getenv("HOMEDRIVE");
+			char *path = getenv("HOMEPATH");
+			if (drive && path) {
+				snprintf(homepath, MAX_PATH, "%s/%s", drive, path);
+				home = homepath;
+			}
+		}
+#else
+		struct passwd *pwd = getpwuid(getuid());
+		if (pwd)
+			home = pwd->pw_dir;
+
+#endif
+	}
+
+	if (home == NULL)
+		return home;
+
+	char *home_path;
+
+	if (append_path)
+		home_path = alloc_printf("%s/%s", home, append_path);
+	else
+		home_path = alloc_printf("%s", home);
+
+	return home_path;
 }

@@ -18,7 +18,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -760,12 +760,6 @@ static int str9xpec_erase_check(struct flash_bank *bank)
 	return str9xpec_blank_check(bank, 0, bank->num_sectors - 1);
 }
 
-static int get_str9xpec_info(struct flash_bank *bank, char *buf, int buf_size)
-{
-	snprintf(buf, buf_size, "str9xpec flash driver info");
-	return ERROR_OK;
-}
-
 COMMAND_HANDLER(str9xpec_handle_flash_options_read_command)
 {
 	uint8_t status;
@@ -1215,5 +1209,4 @@ struct flash_driver str9xpec_flash = {
 	.auto_probe = str9xpec_probe,
 	.erase_check = str9xpec_erase_check,
 	.protect_check = str9xpec_protect_check,
-	.info = get_str9xpec_info,
 };

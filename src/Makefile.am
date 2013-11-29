@@ -12,7 +12,7 @@ SUBDIRS = \
 	server \
 	rtos
 
-lib_LTLIBRARIES = libopenocd.la
+noinst_LTLIBRARIES = libopenocd.la
 bin_PROGRAMS = openocd
 
 MAINFILE = main.c
@@ -66,24 +66,20 @@ endif
 if FT2232_LIBFTDI
 FTDI2232LIB = -lftdi -lusb
 else
-if USB_BLASTER_LIBFTDI
-FTDI2232LIB = -lftdi -lusb
-else
 if PRESTO_LIBFTDI
 FTDI2232LIB = -lftdi -lusb
 else
 FTDI2232LIB =
 endif
 endif
-endif
 
 LIBUSB =
 if USE_LIBUSB1
-LIBUSB += -lusb-1.0
+LIBUSB += $(LIBUSB1_LIBS)
 endif
 
 if USE_LIBUSB0
-LIBUSB += -lusb
+LIBUSB += $(LIBUSB0_LIBS)
 endif
 
 libopenocd_la_LIBADD = \

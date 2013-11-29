@@ -21,7 +21,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -489,9 +489,10 @@ static int str7x_write_block(struct flash_bank *bank, uint8_t *buffer,
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	};
 
-	target_write_buffer(target, write_algorithm->address,
-			sizeof(str7x_flash_write_code),
-			(uint8_t *)str7x_flash_write_code);
+	uint8_t code[sizeof(str7x_flash_write_code)];
+	target_buffer_set_u32_array(target, code, ARRAY_SIZE(str7x_flash_write_code),
+			str7x_flash_write_code);
+	target_write_buffer(target, write_algorithm->address, sizeof(code), code);
 
 	/* memory buffer */
 	while (target_alloc_working_area_try(target, buffer_size, &source) != ERROR_OK) {
@@ -707,13 +708,13 @@ COMMAND_HANDLER(str7x_handle_part_id_command)
 
 static int get_str7x_info(struct flash_bank *bank, char *buf, int buf_size)
 {
-	snprintf(buf, buf_size, "str7x flash driver info");
-	/* STR7x flash doesn't support sector protection interrogation.
-	 * FLASH_NVWPAR acts as a write only register; its read value
-	 * doesn't reflect the actual protection state of the sectors.
+	/* Setting the write protection on a sector is a permanent change but it
+	 * can be disabled temporarily. FLASH_NVWPAR reflects the permanent
+	 * protection state of the sectors, not the temporary.
 	 */
-	LOG_WARNING("STR7x flash lock information might not be correct "
-			"due to hardware limitations.");
+	snprintf(buf, buf_size, "STR7x flash protection info is only valid after a power cycle, "
+			"clearing the protection is only temporary and may not be reflected in the current "
+			"info returned.");
 	return ERROR_OK;
 }
 

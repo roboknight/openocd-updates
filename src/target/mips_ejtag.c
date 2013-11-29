@@ -19,7 +19,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -28,6 +28,7 @@
 
 #include "mips32.h"
 #include "mips_ejtag.h"
+#include "mips32_dmaacc.h"
 
 void mips_ejtag_set_instr(struct mips_ejtag *ejtag_info, int new_instr)
 {
@@ -97,6 +98,29 @@ static int mips_ejtag_get_impcode(struct mips_ejtag *ejtag_info, uint32_t *impco
 	*impcode = buf_get_u32(field.in_value, 0, 32);
 
 	return ERROR_OK;
+}
+
+void mips_ejtag_add_scan_96(struct mips_ejtag *ejtag_info, uint32_t ctrl, uint32_t data, uint8_t *in_scan_buf)
+{
+	assert(ejtag_info->tap != NULL);
+	struct jtag_tap *tap = ejtag_info->tap;
+
+	struct scan_field field;
+	uint8_t out_scan[12];
+
+	/* processor access "all" register 96 bit */
+	field.num_bits = 96;
+
+	field.out_value = out_scan;
+	buf_set_u32(out_scan, 0, 32, ctrl);
+	buf_set_u32(out_scan + 4, 0, 32, data);
+	buf_set_u32(out_scan + 8, 0, 32, 0);
+
+	field.in_value = in_scan_buf;
+
+	jtag_add_dr_scan(tap, 1, &field, TAP_IDLE);
+
+	keep_alive();
 }
 
 int mips_ejtag_drscan_32(struct mips_ejtag *ejtag_info, uint32_t *data)
@@ -193,28 +217,49 @@ void mips_ejtag_drscan_8_out(struct mips_ejtag *ejtag_info, uint8_t data)
 /* Set (to enable) or clear (to disable stepping) the SSt bit (bit 8) in Cp0 Debug reg (reg 23, sel 0) */
 int mips_ejtag_config_step(struct mips_ejtag *ejtag_info, int enable_step)
 {
-	int code_len = enable_step ? 6 : 7;
+	struct pracc_queue_info ctx = {.max_code = 7};
+	pracc_queue_init(&ctx);
+	if (ctx.retval != ERROR_OK)
+		goto exit;
 
-	uint32_t *code = malloc(code_len * sizeof(uint32_t));
-	if (code == NULL) {
-		LOG_ERROR("Out of memory");
-		return ERROR_FAIL;
-	}
-	uint32_t *code_p = code;
-
-	*code_p++ = MIPS32_MTC0(1, 31, 0);			/* move $1 to COP0 DeSave */
-	*code_p++ = MIPS32_MFC0(1, 23, 0),			/* move COP0 Debug to $1 */
-	*code_p++ = MIPS32_ORI(1, 1, 0x0100);			/* set SSt bit in debug reg */
+	pracc_add(&ctx, 0, MIPS32_MFC0(8, 23, 0));			/* move COP0 Debug to $8 */
+	pracc_add(&ctx, 0, MIPS32_ORI(8, 8, 0x0100));			/* set SSt bit in debug reg */
 	if (!enable_step)
-		*code_p++ = MIPS32_XORI(1, 1, 0x0100);		/* clear SSt bit in debug reg */
+		pracc_add(&ctx, 0, MIPS32_XORI(8, 8, 0x0100));		/* clear SSt bit in debug reg */
 
-	*code_p++ = MIPS32_MTC0(1, 23, 0);			/* move $1 to COP0 Debug */
-	*code_p++ = MIPS32_B(NEG16((code_len - 1)));		/* jump to start */
-	*code_p = MIPS32_MFC0(1, 31, 0);			/* move COP0 DeSave to $1 */
+	pracc_add(&ctx, 0, MIPS32_MTC0(8, 23, 0));			/* move $8 to COP0 Debug */
+	pracc_add(&ctx, 0, MIPS32_LUI(8, UPPER16(ejtag_info->reg8)));		/* restore upper 16 bits  of $8 */
+	pracc_add(&ctx, 0, MIPS32_B(NEG16((ctx.code_count + 1))));			/* jump to start */
+	pracc_add(&ctx, 0, MIPS32_ORI(8, 8, LOWER16(ejtag_info->reg8)));	/* restore lower 16 bits of $8 */
 
-	int retval = mips32_pracc_exec(ejtag_info, code_len, code, 0, NULL, 0, NULL, 1);
+	ctx.retval = mips32_pracc_queue_exec(ejtag_info, &ctx, NULL);
+exit:
+	pracc_queue_free(&ctx);
+	return ctx.retval;
+}
 
-	free(code);
+/*
+ * Disable memory protection for 0xFF20.0000–0xFF3F.FFFF
+ * It is needed by EJTAG 1.5-2.0, especially for BMIPS CPUs
+ * For example bcm7401 and others. At leas on some
+ * CPUs, DebugMode wont start if this bit is not removed.
+ */
+static int disable_dcr_mp(struct mips_ejtag *ejtag_info)
+{
+	uint32_t dcr;
+	int retval;
+
+	retval = mips32_dmaacc_read_mem(ejtag_info, EJTAG_DCR, 4, 1, &dcr);
+	if (retval != ERROR_OK)
+		goto error;
+
+	dcr &= ~EJTAG_DCR_MP;
+	retval = mips32_dmaacc_write_mem(ejtag_info, EJTAG_DCR, 4, 1, &dcr);
+	if (retval != ERROR_OK)
+		goto error;
+	return ERROR_OK;
+error:
+	LOG_ERROR("Failed to remove DCR MPbit!");
 	return retval;
 }
 
@@ -222,6 +267,11 @@ int mips_ejtag_enter_debug(struct mips_ejtag *ejtag_info)
 {
 	uint32_t ejtag_ctrl;
 	mips_ejtag_set_instr(ejtag_info, EJTAG_INST_CONTROL);
+
+	if (ejtag_info->ejtag_version == EJTAG_VERSION_20) {
+		if (disable_dcr_mp(ejtag_info) != ERROR_OK)
+			goto error;
+	}
 
 	/* set debug break bit */
 	ejtag_ctrl = ejtag_info->ejtag_ctrl | EJTAG_CTRL_JTAGBRK;
@@ -231,31 +281,69 @@ int mips_ejtag_enter_debug(struct mips_ejtag *ejtag_info)
 	ejtag_ctrl = ejtag_info->ejtag_ctrl;
 	mips_ejtag_drscan_32(ejtag_info, &ejtag_ctrl);
 	LOG_DEBUG("ejtag_ctrl: 0x%8.8" PRIx32 "", ejtag_ctrl);
-	if ((ejtag_ctrl & EJTAG_CTRL_BRKST) == 0) {
-		LOG_ERROR("Failed to enter Debug Mode!");
-		return ERROR_FAIL;
-	}
+	if ((ejtag_ctrl & EJTAG_CTRL_BRKST) == 0)
+		goto error;
 
 	return ERROR_OK;
+error:
+	LOG_ERROR("Failed to enter Debug Mode!");
+	return ERROR_FAIL;
 }
 
 int mips_ejtag_exit_debug(struct mips_ejtag *ejtag_info)
 {
-	uint32_t inst;
-	inst = MIPS32_DRET;
+	uint32_t instr = MIPS32_DRET;
+	struct pracc_queue_info ctx = {.max_code = 1, .pracc_list = &instr, .code_count = 1, .store_count = 0};
 
 	/* execute our dret instruction */
-	int retval = mips32_pracc_exec(ejtag_info, 1, &inst, 0, NULL, 0, NULL, 0);
+	ctx.retval = mips32_pracc_queue_exec(ejtag_info, &ctx, NULL);
 
 	/* pic32mx workaround, false pending at low core clock */
 	jtag_add_sleep(1000);
-
-	return retval;
+	return ctx.retval;
 }
+
+/* mips_ejtag_init_mmr - asign Memory-Mapped Registers depending
+ *			on EJTAG version.
+ */
+static void mips_ejtag_init_mmr(struct mips_ejtag *ejtag_info)
+{
+	if (ejtag_info->ejtag_version == EJTAG_VERSION_20) {
+		ejtag_info->ejtag_ibs_addr	= EJTAG_V20_IBS;
+		ejtag_info->ejtag_iba0_addr	= EJTAG_V20_IBA0;
+		ejtag_info->ejtag_ibc_offs	= EJTAG_V20_IBC_OFFS;
+		ejtag_info->ejtag_ibm_offs	= EJTAG_V20_IBM_OFFS;
+
+		ejtag_info->ejtag_dbs_addr	= EJTAG_V20_DBS;
+		ejtag_info->ejtag_dba0_addr	= EJTAG_V20_DBA0;
+		ejtag_info->ejtag_dbc_offs	= EJTAG_V20_DBC_OFFS;
+		ejtag_info->ejtag_dbm_offs	= EJTAG_V20_DBM_OFFS;
+		ejtag_info->ejtag_dbv_offs	= EJTAG_V20_DBV_OFFS;
+
+		ejtag_info->ejtag_iba_step_size	= EJTAG_V20_IBAn_STEP;
+		ejtag_info->ejtag_dba_step_size	= EJTAG_V20_DBAn_STEP;
+	} else {
+		ejtag_info->ejtag_ibs_addr	= EJTAG_V25_IBS;
+		ejtag_info->ejtag_iba0_addr	= EJTAG_V25_IBA0;
+		ejtag_info->ejtag_ibm_offs	= EJTAG_V25_IBM_OFFS;
+		ejtag_info->ejtag_ibasid_offs	= EJTAG_V25_IBASID_OFFS;
+		ejtag_info->ejtag_ibc_offs	= EJTAG_V25_IBC_OFFS;
+
+		ejtag_info->ejtag_dbs_addr	= EJTAG_V25_DBS;
+		ejtag_info->ejtag_dba0_addr	= EJTAG_V25_DBA0;
+		ejtag_info->ejtag_dbm_offs	= EJTAG_V25_DBM_OFFS;
+		ejtag_info->ejtag_dbasid_offs	= EJTAG_V25_DBASID_OFFS;
+		ejtag_info->ejtag_dbc_offs	= EJTAG_V25_DBC_OFFS;
+		ejtag_info->ejtag_dbv_offs	= EJTAG_V25_DBV_OFFS;
+
+		ejtag_info->ejtag_iba_step_size	= EJTAG_V25_IBAn_STEP;
+		ejtag_info->ejtag_dba_step_size	= EJTAG_V25_DBAn_STEP;
+	}
+}
+
 
 int mips_ejtag_init(struct mips_ejtag *ejtag_info)
 {
-	uint32_t ejtag_version;
 	int retval;
 
 	retval = mips_ejtag_get_impcode(ejtag_info, &ejtag_info->impcode);
@@ -264,25 +352,25 @@ int mips_ejtag_init(struct mips_ejtag *ejtag_info)
 	LOG_DEBUG("impcode: 0x%8.8" PRIx32 "", ejtag_info->impcode);
 
 	/* get ejtag version */
-	ejtag_version = ((ejtag_info->impcode >> 29) & 0x07);
+	ejtag_info->ejtag_version = ((ejtag_info->impcode >> 29) & 0x07);
 
-	switch (ejtag_version) {
-		case 0:
+	switch (ejtag_info->ejtag_version) {
+		case EJTAG_VERSION_20:
 			LOG_DEBUG("EJTAG: Version 1 or 2.0 Detected");
 			break;
-		case 1:
+		case EJTAG_VERSION_25:
 			LOG_DEBUG("EJTAG: Version 2.5 Detected");
 			break;
-		case 2:
+		case EJTAG_VERSION_26:
 			LOG_DEBUG("EJTAG: Version 2.6 Detected");
 			break;
-		case 3:
+		case EJTAG_VERSION_31:
 			LOG_DEBUG("EJTAG: Version 3.1 Detected");
 			break;
-		case 4:
+		case EJTAG_VERSION_41:
 			LOG_DEBUG("EJTAG: Version 4.1 Detected");
 			break;
-		case 5:
+		case EJTAG_VERSION_51:
 			LOG_DEBUG("EJTAG: Version 5.1 Detected");
 			break;
 		default:
@@ -304,6 +392,8 @@ int mips_ejtag_init(struct mips_ejtag *ejtag_info)
 	/* set initial state for ejtag control reg */
 	ejtag_info->ejtag_ctrl = EJTAG_CTRL_ROCC | EJTAG_CTRL_PRACC | EJTAG_CTRL_PROBEN | EJTAG_CTRL_SETDEV;
 	ejtag_info->fast_access_save = -1;
+
+	mips_ejtag_init_mmr(ejtag_info);
 
 	return ERROR_OK;
 }
@@ -332,7 +422,7 @@ int mips_ejtag_fastdata_scan(struct mips_ejtag *ejtag_info, int write_t, uint32_
 		fields[1].in_value = NULL;
 		buf_set_u32(t, 0, 32, *data);
 	} else
-		fields[1].in_value = (void *) data;
+		fields[1].in_value = (uint8_t *) data;
 
 	jtag_add_dr_scan(tap, 2, fields, TAP_IDLE);
 

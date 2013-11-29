@@ -16,7 +16,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 #ifndef MINIDRIVER_IMP_H
 #define MINIDRIVER_IMP_H
@@ -26,7 +26,7 @@
 static inline void interface_jtag_add_scan_check_alloc(struct scan_field *field)
 {
 	unsigned num_bytes = DIV_ROUND_UP(field->num_bits, 8);
-	field->in_value = (uint8_t *)cmd_queue_alloc(num_bytes);
+	field->in_value = cmd_queue_alloc(num_bytes);
 }
 
 void interface_jtag_add_dr_out(struct jtag_tap *tap,

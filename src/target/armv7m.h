@@ -21,7 +21,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifndef ARMV7M_COMMON_H
@@ -29,16 +29,6 @@
 
 #include "arm_adi_v5.h"
 #include "arm.h"
-
-/* define for enabling armv7 gdb workarounds */
-#if 1
-#define ARMV7_GDB_HACKS
-#endif
-
-#ifdef ARMV7_GDB_HACKS
-extern uint8_t armv7m_gdb_dummy_cpsr_value[];
-extern struct reg armv7m_gdb_dummy_cpsr_reg;
-#endif
 
 extern const int armv7m_psp_reg_map[];
 extern const int armv7m_msp_reg_map[];
@@ -195,7 +185,8 @@ int armv7m_mode_to_number(enum armv7m_mode mode);
 
 int armv7m_arch_state(struct target *target);
 int armv7m_get_gdb_reg_list(struct target *target,
-		struct reg **reg_list[], int *reg_list_size);
+		struct reg **reg_list[], int *reg_list_size,
+		enum target_register_class reg_class);
 
 int armv7m_init_arch_info(struct target *target, struct armv7m_common *armv7m);
 

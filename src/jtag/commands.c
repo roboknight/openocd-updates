@@ -25,7 +25,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -109,14 +109,16 @@ void *cmd_queue_alloc(size_t size)
 	if (!*p_page) {
 		*p_page = malloc(sizeof(struct cmd_queue_page));
 		(*p_page)->used = 0;
-		(*p_page)->address = malloc(CMD_QUEUE_PAGE_SIZE);
+		size_t alloc_size = (size < CMD_QUEUE_PAGE_SIZE) ?
+					CMD_QUEUE_PAGE_SIZE : size;
+		(*p_page)->address = malloc(alloc_size);
 		(*p_page)->next = NULL;
 	}
 
 	offset = (*p_page)->used;
 	(*p_page)->used += size;
 
-	t = (uint8_t *)((*p_page)->address);
+	t = (*p_page)->address;
 	return t + offset;
 }
 

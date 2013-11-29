@@ -21,7 +21,7 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, write to the                         *
  *   Free Software Foundation, Inc.,                                       *
- *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
+ *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -449,8 +449,10 @@ static int pic32mx_write_block(struct flash_bank *bank, uint8_t *buffer,
 		row_size = 512;
 	}
 
-	retval = target_write_buffer(target, write_algorithm->address,
-			sizeof(pic32mx_flash_write_code), (uint8_t *)pic32mx_flash_write_code);
+	uint8_t code[sizeof(pic32mx_flash_write_code)];
+	target_buffer_set_u32_array(target, code, ARRAY_SIZE(pic32mx_flash_write_code),
+			pic32mx_flash_write_code);
+	retval = target_write_buffer(target, write_algorithm->address, sizeof(code), code);
 	if (retval != ERROR_OK)
 		return retval;
 
