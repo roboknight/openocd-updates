@@ -102,6 +102,7 @@ extern struct target_type nds32_v2_target;
 extern struct target_type nds32_v3_target;
 extern struct target_type nds32_v3m_target;
 extern struct target_type or1k_target;
+extern struct target_type jem_target;
 
 static struct target_type *target_types[] = {
 	&arm7tdmi_target,
