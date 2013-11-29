@@ -6,8 +6,9 @@ else
 OOCD_TRACE_FILES =
 endif
 
-SUBDIRS = openrisc jem
-libtarget_la_LIBADD = $(top_builddir)/src/target/openrisc/libopenrisc.la $(top_builddir)/src/target/jem/libjem.la
+SUBDIRS = openrisc jem 
+libtarget_la_LIBADD = $(top_builddir)/src/target/openrisc/libopenrisc.la \
+		      $(top_builddir)/src/target/jem/libjem.la \
 
 BIN2C		= $(top_builddir)/src/helper/bin2char$(EXEEXT_FOR_BUILD)
 
