@@ -1349,9 +1349,9 @@ COMMAND_HANDLER(stm32x_handle_options_read_command)
 			command_print(CMD_CTX, "Boot: Bank 1");
 	}
 
-	command_print(CMD_CTX, "User Option0: 0x%02" PRIx8,
+	command_print(CMD_CTX, "User Option0: 0x%02x" PRIx8,
 			(user_data >> stm32x_info->user_data_offset) & 0xff);
-	command_print(CMD_CTX, "User Option1: 0x%02" PRIx8,
+	command_print(CMD_CTX, "User Option1: 0x%02x" PRIx8,
 			(user_data >> (stm32x_info->user_data_offset + 8)) & 0xff);
 
 	return ERROR_OK;

@@ -135,9 +135,9 @@ static int mdr_erase(struct flash_bank *bank, int first, int last)
 {
 	struct target *target = bank->target;
 	struct mdr_flash_bank *mdr_info = bank->driver_priv;
-	int i, retval, retval2;
+	int i, retval=ERROR_OK, retval2=ERROR_OK;
 	unsigned int j;
-	uint32_t flash_cmd, cur_per_clock;
+	uint32_t flash_cmd=0, cur_per_clock=0;
 
 	if (bank->target->state != TARGET_HALTED) {
 		LOG_ERROR("Target not halted");
@@ -348,8 +348,8 @@ static int mdr_write(struct flash_bank *bank, uint8_t *buffer,
 			buffer[count++] = 0xff;
 	}
 
-	uint32_t flash_cmd, cur_per_clock;
-	int retval, retval2;
+	uint32_t flash_cmd=0, cur_per_clock=0;
+	int retval=ERROR_OK, retval2=ERROR_OK;
 
 	retval = target_read_u32(target, MD_PER_CLOCK, &cur_per_clock);
 	if (retval != ERROR_OK)
