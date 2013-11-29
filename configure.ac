@@ -1001,7 +1001,7 @@ if test $build_ft2232_libftdi = yes -o $build_usb_blaster_libftdi = yes -o \
   $build_openjtag_ftdi = yes; then
   # We assume: the package is preinstalled in the proper place
   # these present as 2 libraries..
-  LIBS="$LIBS -lftdi -lusb"
+  LIBS="$LIBS $LIBFTDI $LIBUSB"
   #
   # Try to build a small program.
   AC_MSG_CHECKING([Build & Link with libftdi...])
