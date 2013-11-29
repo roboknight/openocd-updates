@@ -22,16 +22,24 @@
 #include "config.h"
 #endif
 
+#include <mach/mach_time.h>
+#define ORWL_NANO (+1.0E-9)
+#define ORWL_GIGA UINT64_C(1000000000)
+
 #include <unistd.h>
 #include <time.h>
-#include "target.h"
-#include "target_type.h"
-#include "binarybuffer.h"
-#include "breakpoints.h"
+#include <target/target.h>
+#include <target/target_type.h>
+#include <helper/binarybuffer.h>
+#include <target/breakpoints.h>
 #include "jem_t.h"
 
 #define JEM_JTAG_INS_LEN	4
 
+
+#ifdef __APPLE__
+void orwl_gettime(struct timespec *t);
+#endif // __APPLE__
 
 //////////////
 /*************
@@ -264,14 +272,22 @@ static int jem_check_reg(struct target *target, enum IR_NAMES ir, uint32_t bit, 
 	long elapsed;
 	
 	if(jem_change_ir(target, ir) == ERROR_OK) {
-		clock_gettime(CLOCK_MONOTONIC, &start);
+#ifdef __APPLE__
+		orwl_gettime(&start);
+#elif
+		clock_gettime(CLOCK_MONOTONIC,&start);
+#endif
 		do {
 			jem_get_drscan_buffer(target, ir);
 			if(expected == jem_get_dr_bit(target, ir, bit)) {
 				retval = ERROR_OK;
 				break;
 			}
-			clock_gettime(CLOCK_MONOTONIC, &now);
+#ifdef __APPLE__
+			orwl_gettime(&now);
+#elif
+			clock_gettime(CLOCK_MONOTONIC,&now);
+#endif
 			elapsed = (now.tv_sec * 1000 + now.tv_nsec / 1000000) - (start.tv_sec * 1000 + start.tv_nsec / 1000000);
 		} while(elapsed < ms_timeout);
 	}
@@ -570,7 +586,7 @@ static int jem_write_memory(struct target *target, uint32_t addr, uint32_t size,
 	if(target->state == TARGET_HALTED) {
 		if(jem_change_ir(target, DATA) == ERROR_OK) {
 			do {
-				local = *(uint32_t *)((uint8_t *)buffer++);
+				local = *(uint32_t *)((void *)((uint8_t *)buffer++));
 				jem_set_dr32(target, DATA, 0, 32, local);
 				jem_set_dr32(target, DATA, 32, 32, 0x0);
 				jem_set_dr32(target, DATA, 64, 32, address+(offset++*4));
@@ -886,3 +902,21 @@ static void destroy_scan_fields(struct scan_field *fields, int field_cnt) {
 	LOG_DEBUG("Exit");
 }
 
+#ifdef __APPLE__
+static double orwl_timebase = 0.0;
+static uint64_t orwl_timestart = 0;
+
+void orwl_gettime(struct timespec *t) {
+  // be more careful in a multithreaded environement
+  if (!orwl_timestart) {
+    mach_timebase_info_data_t tb = { 0,1 };
+    mach_timebase_info(&tb);
+    orwl_timebase = tb.numer;
+    orwl_timebase /= tb.denom;
+    orwl_timestart = mach_absolute_time();
+  }
+  double diff = (mach_absolute_time() - orwl_timestart) * orwl_timebase;
+  t->tv_sec = diff * ORWL_NANO;
+  t->tv_nsec = diff - (t->tv_sec * ORWL_GIGA);
+}
+#endif // __APPLE__

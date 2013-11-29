@@ -1262,6 +1262,7 @@ AC_CONFIG_FILES([
   src/jtag/aice/Makefile
   src/transport/Makefile
   src/target/openrisc/Makefile
+  src/target/jem/Makefile
   src/xsvf/Makefile
   src/svf/Makefile
   src/target/Makefile
