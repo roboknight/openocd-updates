@@ -20,8 +20,8 @@
 
 #include <unistd.h>
 #include <time.h>
-#include "target.h"
-#include "target_type.h"
+#include <target/target.h>
+#include <target/target_type.h>
 
 #include "blackfin.h"
 

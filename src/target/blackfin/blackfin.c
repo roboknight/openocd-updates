@@ -24,10 +24,10 @@
 
 #include <unistd.h>
 #include <time.h>
-#include "target.h"
-#include "target_type.h"
-#include "binarybuffer.h"
-#include "breakpoints.h"
+#include <target/target.h>
+#include <target/target_type.h>
+#include <helper/binarybuffer.h>
+#include <target/breakpoints.h>
 
 #include "blackfin.h"
 
@@ -88,7 +88,7 @@ static int blackfin_reset_jtag(void);
 /* BLACKFIN Helpers */
 static uint32_t blackfin_register_get(struct target *target, enum core_regnum reg);
 static void blackfin_register_set(struct target *target, enum core_regnum reg, uint32_t value);
-static int blackfin_emuir_set (struct target *target, uint64_t insn1, uint64_t insn2, uint32_t icount, bool);
+static int blackfin_emuir_set (struct target *target, uint64_t insn1, uint64_t insn2, uint32_t icount, bool, bool);
 static int blackfin_wait_in_reset(struct target *target);
 static int blackfin_update_dbgctl(struct target *target);
 static int blackfin_update_dbgstat(struct target *target);
@@ -155,7 +155,7 @@ static const struct timespec bfin_emu_wait_ts = {0, 5000000};
 NOT_USED static int blackfin_start_target(enum jtag_event event, void *priv) 
 {
 	int err = ERROR_OK;
-	struct blackfin_common *blackfin = (struct blackfin_common *)priv;
+	struct blackfin_common __unused *blackfin = (struct blackfin_common *)priv;
 
 	LOG_DEBUG("Entering");
 
@@ -317,13 +317,13 @@ static int blackfin_soft_reset_halt(struct target *target)
 	p0 = blackfin_register_get(target, REG_P0);
 	LOG_DEBUG("************************************* p0=%08x", p0);
 	blackfin_register_set(target, REG_R0, 0x07);
-	blackfin_emuir_set(target, gen_store16_offset (REG_P0, 0, REG_R0), INSN_NOP,2, false);
-	blackfin_emuir_set(target, INSN_NOP,INSN_NOP,2, false);
+	blackfin_emuir_set(target, gen_store16_offset (REG_P0, 0, REG_R0), INSN_NOP,2, false, true);
+	blackfin_emuir_set(target, INSN_NOP,INSN_NOP,2, false, true);
 	
 	usleep (100);
 	blackfin_register_set(target, REG_R0, 0x00);
-	blackfin_emuir_set(target, gen_store16_offset (REG_P0, 0, REG_R0), INSN_NOP,2, false);
-	blackfin_emuir_set(target, INSN_NOP,INSN_NOP,2, false);
+	blackfin_emuir_set(target, gen_store16_offset (REG_P0, 0, REG_R0), INSN_NOP,2, false, true);
+	blackfin_emuir_set(target, INSN_NOP,INSN_NOP,2, false, true);
 
 	usleep (100);
 	
@@ -333,7 +333,7 @@ static int blackfin_soft_reset_halt(struct target *target)
 	// ************* CORE RESET CODE BELOW **************
 
 	// Set the instructions to NOP
-	blackfin_emuir_set(target, INSN_NOP, INSN_NOP,2,false);
+	blackfin_emuir_set(target, INSN_NOP, INSN_NOP,2,false, true);
 	blackfin_update_dbgctl(target);
 	BLACKFIN(target)dbgctl &= ~REG_MASK(dc_empwr,1);
 	BLACKFIN(target)dbgctl |= REG_MASK(dc_sram_init,1) | REG_MASK(dc_sysrst,1);
@@ -377,8 +377,8 @@ static int blackfin_read_memory(struct target *target, uint32_t addr, uint32_t s
 {
 	int err = ERROR_FAIL;
 	uint32_t p0,r0,i;
-	uint32_t *p32_buff = (uint32_t *)buffer;
-	uint16_t *p16_buff = (uint16_t *)buffer;
+	uint32_t *p32_buff = (uint32_t *)((void *)buffer);
+	uint16_t *p16_buff = (uint16_t *)((void *)buffer);
 
 
 	p0 = blackfin_register_get(target, REG_P0);
@@ -391,7 +391,7 @@ static int blackfin_read_memory(struct target *target, uint32_t addr, uint32_t s
 			blackfin_update_emudat(target);
 			*p32_buff++ = BLACKFIN(target)emudat_in;
 			//blackfin_register_set(target, REG_P0, addr+(i*4));
-			//blackfin_emuir_set(target, gen_load32pi(REG_R0,REG_P0), gen_move(REG_EMUDAT, REG_R0), 2, true);
+			//blackfin_emuir_set(target, gen_load32pi(REG_R0,REG_P0), gen_move(REG_EMUDAT, REG_R0), 2, true, true);
 		}
 		blackfin_register_set(target, REG_P0,p0);
 		blackfin_register_set(target, REG_R0,r0);
@@ -403,7 +403,7 @@ static int blackfin_read_memory(struct target *target, uint32_t addr, uint32_t s
 			blackfin_update_emudat(target);
 			*p16_buff++ = (uint16_t)BLACKFIN(target)emudat_in;
 			//blackfin_register_set(target, REG_P0, addr+(i*2));
-			//blackfin_emuir_set(target, gen_load16z(REG_R0,REG_P0), gen_move(REG_EMUDAT, REG_R0), 2, true);
+			//blackfin_emuir_set(target, gen_load16z(REG_R0,REG_P0), gen_move(REG_EMUDAT, REG_R0), 2, true, true);
 		}
 		blackfin_register_set(target, REG_P0,p0);
 		blackfin_register_set(target, REG_R0,r0);
@@ -447,12 +447,12 @@ static uint32_t blackfin_register_get(struct target *target, enum core_regnum re
 	uint32_t r0, value;
 
 	if (DREG_P(reg) || PREG_P(reg))
-		blackfin_emuir_set(target, gen_move(REG_EMUDAT, reg),INSN_NOP,2, false);
+		blackfin_emuir_set(target, gen_move(REG_EMUDAT, reg),INSN_NOP,2, false, true);
 	else {
 		/* First grab register r0 so we can restore it */
 		r0 = blackfin_register_get(target, REG_R0);
 		
-		blackfin_emuir_set(target, gen_move(REG_R0, reg),gen_move(REG_EMUDAT,REG_R0),2, false);
+		blackfin_emuir_set(target, gen_move(REG_R0, reg),gen_move(REG_EMUDAT,REG_R0),2, false, true);
 	}
 	
 	blackfin_update_emudat(target);
@@ -475,18 +475,18 @@ static void blackfin_register_set(struct target *target, enum core_regnum reg, u
 	blackfin_update_emudat(target);
 	
 	if (DREG_P(reg) || PREG_P (reg))
-		blackfin_emuir_set (target, gen_move(reg, REG_EMUDAT), INSN_NOP, 2, false);
+		blackfin_emuir_set (target, gen_move(reg, REG_EMUDAT), INSN_NOP, 2, false, true);
 	else {
 		/* First grab register r0 so we can restore it */
 		r0 = blackfin_register_get(target, REG_R0);
 		
-		blackfin_emuir_set(target, gen_move(REG_R0, REG_EMUDAT),gen_move(reg,REG_R0),2, false);
+		blackfin_emuir_set(target, gen_move(REG_R0, REG_EMUDAT),gen_move(reg,REG_R0),2, false, true);
 		blackfin_register_set(target, REG_R0, r0);
 	}
 	
 }
 
-static int blackfin_emuir_set (struct target *target, uint64_t insn1, uint64_t insn2, uint32_t icount, bool repeat_last, bool execute_once=true)
+static int blackfin_emuir_set (struct target *target, uint64_t insn1, uint64_t insn2, uint32_t icount, bool repeat_last, bool execute_once)
 {
 	bool do_insn32 = false;
 	bool do_insn16 = false;
@@ -538,7 +538,7 @@ static int blackfin_emuir_set (struct target *target, uint64_t insn1, uint64_t i
 			jtag_add_plain_dr_scan(64, (const uint8_t *)&tmp64_a,out, TAP_DRPAUSE);
 		}
 		if(execute_once)
-			jtag_add_pathmove(TAP_IDLE);
+			jtag_add_statemove(TAP_IDLE);
 		if(jtag_execute_queue() != ERROR_OK) return ERROR_FAIL;
 	} else {
 		if(do_insn32)
